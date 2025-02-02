@@ -1,6 +1,6 @@
 # Source: MIT-LCP/mimic-code (MIMIC-IV)
 # File: import.sh
-# URL: https://github.com/MIT-LCP/mimic-code/blob/main/mimic-iv/buildmimic/sqlite/import.py
+# URL: https://github.com/MIT-LCP/mimic-code/blob/main/mimic-iv/buildmimic/sqlite/db_setup.py
 # License: GNU General Public License v3.0 (GPL-3.0)
 
 
@@ -42,21 +42,21 @@ _MIMIC_TABLES = (
     'services',
     'transfers',
     # ICU derived tables
-    'caregiver',
-    'chartevents',
-    'd_items',
-    'datetimeevents',
-    'icustays',
-    'ingredientevents',
-    'inputevents',
-    'outputevents',
-    'procedureevents',
+    #'caregiver',
+    #'chartevents',
+    #'d_items',
+    #'datetimeevents',
+    #'icustays',
+    #'ingredientevents',
+    #'inputevents',
+    #'outputevents',
+    #'procedureevents',
 )
 
 def process_dataframe(df: pd.DataFrame, subjects: t.Optional[t.List[int]] = None) -> pd.DataFrame:
     for c in df.columns:
         if c.endswith('time') or c.endswith('date'):
-            df[c] = pd.to_datetime(df[c], format='ISO8601')
+            df[c] = pd.to_datetime(df[c], format='ISO8601', errors='coerce')
     
     if subjects is not None and 'subject_id' in df:
         df = df.loc[df['subject_id'].isin(subjects)]
