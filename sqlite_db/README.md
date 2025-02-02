@@ -1,8 +1,8 @@
 # Building the MIMIC database with SQLite
 
-Either `import.sh` or `import.py` can be used to generate a [SQLite](https://sqlite.org/index.html) database file from the MIMIC-IV demo or full dataset.
+Either `db_setup.sh` or `db_setup.py` can be used to generate a [SQLite](https://sqlite.org/index.html) database file from the MIMIC-IV demo or full dataset.
 
-`import.sh` is a shell script that will work with any POSIX compliant shell.
+`db_setup.sh` is a shell script that will work with any POSIX compliant shell.
 It is memory efficient and does not require loading entire data files
 into memory. It only needs three things to run:
 
@@ -10,9 +10,9 @@ into memory. It only needs three things to run:
 2. [SQLite]([https://sqlite.org/index.html)
 3. gzip (which is installed by default on any Linux/BSD/Mac variant)
 
-**Note:** The `import.sh` script will set all data fields to *text*.
+**Note:** The `db_setup.sh` script will set all data fields to *text*.
 
-`import.py` is a python script. It requires the following to run:
+`db_setup.py` is a python script. It requires the following to run:
 
 1. Python 3 installed
 2. [pandas](https://pandas.pydata.org/)
@@ -20,14 +20,14 @@ into memory. It only needs three things to run:
 ## Step 1: Download the CSV or CSV.GZ files.
 
 - Download the MIMIC-IV dataset from: https://physionet.org/content/mimiciv/
-- Place `import.sh` or `import.py` into the same folder as the `csv` or `csv.gz` files
+- Place `db_setup.sh` or `db_setup.py` into the same folder as the `csv` or `csv.gz` files
 
 i.e. your folder structure should resemble:
 
 ```
 path/to/mimic-iv/
-├── import.sh
-├── import.py
+├── db_setup.sh
+├── db_setup.py
 ├── hosp
 │   ├── admissions.csv.gz
 │   ├── ...
@@ -42,10 +42,16 @@ path/to/mimic-iv/
 
 To generate the SQLite file:
 
-Using `import.py`, run on the command-line:
+If you are using `db_setup.sh`, run on the command-line:
 
 ```
-$ python import.py
+$ ./db_setup.sh
+```
+
+If you are using `db_setup.py`, run on the command-line:
+
+```
+$ python db_setup.py
 ```
 
 If loading the full dataset, this will take some time,

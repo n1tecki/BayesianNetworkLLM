@@ -1,3 +1,8 @@
+# Custom
+sqlite_db/hosp/
+sqlite_db/icu/
+mimic4.db
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
