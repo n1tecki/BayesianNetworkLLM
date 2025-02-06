@@ -3,7 +3,7 @@ sqlite_db/db_setup/hosp/*
 sqlite_db/db_setup/icu/*
 mimic4.db
 data/*
-!data/sql_script_exec.py
+!data/dataset_querying.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
