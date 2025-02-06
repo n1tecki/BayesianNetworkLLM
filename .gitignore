@@ -1,7 +1,9 @@
 # Custom
-sqlite_db/hosp/
-sqlite_db/icu/
+sqlite_db/db_setup/hosp/*
+sqlite_db/db_setup/icu/*
 mimic4.db
+data/*
+!data/sql_script_exec.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
