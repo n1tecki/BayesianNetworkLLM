@@ -1,0 +1,6 @@
+openai 
+networkx 
+matplotlib 
+pgmpy 
+numpy
+pandas
