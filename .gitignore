@@ -4,6 +4,7 @@ sqlite_db/db_setup/icu/*
 mimic4.db
 data/*
 !data/dataset_querying.py
+!data/dataset_processing.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
