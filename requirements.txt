@@ -4,3 +4,4 @@ matplotlib
 pgmpy 
 numpy
 pandas
+lightgbm

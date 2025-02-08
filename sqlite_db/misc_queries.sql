@@ -8,9 +8,9 @@ DROP TABLE IF EXISTS balanced_matched_admission_labevents;
 
 
 SELECT diagnoses_category, COUNT(diagnoses_category)
-FROM balanced_matched_admission_labevents
+FROM matched_admission_labevents
 GROUP BY diagnoses_category;
 
 SELECT lab_category, COUNT(lab_category)
-FROM balanced_matched_admission_labevents
+FROM matched_admission_labevents
 GROUP BY lab_category;
