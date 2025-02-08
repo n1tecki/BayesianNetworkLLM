@@ -1,4 +1,6 @@
 -- Balanse the table for all diagnoses categories to have the same occurence
+DROP TABLE IF EXISTS balanced_matched_admission_labevents;
+
 CREATE TABLE balanced_matched_admission_labevents AS
 WITH min_group_size AS (
     SELECT MIN(category_count) AS min_count

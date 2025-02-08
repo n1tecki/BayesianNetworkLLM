@@ -1,4 +1,5 @@
 -- Based on the icd diagnoses codes, tha patients are selected from the admissions table.
+DROP TABLE IF EXISTS admissions_icd_total;
 
 CREATE TABLE admissions_icd_total AS 
 SELECT 

@@ -1,4 +1,5 @@
 -- Based on the itemid lab test codes, tha patients are selected from the labevents table.
+DROP TABLE IF EXISTS labevents_itemid_total;
 
 CREATE TABLE labevents_itemid_total AS 
 SELECT labevent_id,

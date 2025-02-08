@@ -49,7 +49,7 @@ sql_scripts = [
     "sqlite_db/query_scripts/itemid_total.sql", # Creates tables for each group and then creates a UNION of all tables
     "sqlite_db/query_scripts/labevents_itemid_total.sql", # Create a table with all lab test values and their patients
 
-    "sqlite_db/query_scripts/matched_admission_labevents.sql" # Creating a table of matched admissions with icd diagnoses and lab events
+    "sqlite_db/query_scripts/matched_admission_labevents.sql", # Creating a table of matched admissions with icd diagnoses and lab events
     "sqlite_db/query_scripts/balanced_matched_admission_labevents.sql" # Balanse the table for all diagnoses categories to have the same occurence
     
 ]

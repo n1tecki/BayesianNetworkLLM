@@ -1,5 +1,7 @@
 from typing import Dict, Set, Tuple
 
+from pyvis.network import Network
+import networkx as nx
 import math
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -9,7 +11,7 @@ import pandas as pd
 from pgmpy.estimators import HillClimbSearch, BicScore, MaximumLikelihoodEstimator
 from pgmpy.inference import VariableElimination
 from pgmpy.models import BayesianModel
-from sklearn.preprocessing import MultiLabelBinarizer
+
 
 
 def network_train(evidence_binary: pd.DataFrame) -> Tuple[BayesianModel, VariableElimination]:
@@ -27,15 +29,46 @@ def network_train(evidence_binary: pd.DataFrame) -> Tuple[BayesianModel, Variabl
         model (BayesianModel): The Bayesian network with learned structure and parameters.
         inference (VariableElimination): An inference engine for performing probabilistic queries.
     """
+    black_list = [
+    (diag, lab) for diag in evidence_binary.columns if diag.startswith("diagnoses_category_")
+                 for lab in evidence_binary.columns if lab.startswith("lab_category_")
+    ]
+
+    
+    white_list = [
+    (lab, diag) for lab in evidence_binary.columns if lab.startswith("lab_category_")
+                for diag in evidence_binary.columns if diag.startswith("diagnoses_category_")
+    ]
+    
+
+
+    # Define state names for categorical variables
+    state_names = {col: [-1, 0, 1] if col.startswith("lab_category_") else [0, 1]
+                   for col in evidence_binary.columns}
+
+
+
     # Structure learning using Hill Climb Search with BIC score.
-    hc = HillClimbSearch(evidence_binary, scoring_method=BicScore(evidence_binary))
-    best_model_structure = hc.estimate()
+    hc = HillClimbSearch(evidence_binary)
+    best_model_structure = hc.estimate(scoring_method=BicScore(evidence_binary), 
+                                       max_indegree=10, 
+                                       max_iter=5000,
+                                       epsilon=1e-6,
+                                       black_list=black_list,
+                                       white_list=white_list
+                                       )
     print("\nLearned Bayesian Network structure (edges):")
     print(best_model_structure.edges())
 
-    # Parameter learning using Maximum Likelihood Estimation (MLE).
+    
     model = BayesianModel(best_model_structure.edges())
-    model.fit(evidence_binary, estimator=MaximumLikelihoodEstimator)
+
+    # Parameter learning using Maximum Likelihood Estimation (MLE)
+    model.fit(evidence_binary, 
+              estimator=MaximumLikelihoodEstimator, 
+              state_names=state_names)
+    
+
     print("\nLearned CPDs:")
     for cpd in model.get_cpds():
         print(cpd)
@@ -46,19 +79,39 @@ def network_train(evidence_binary: pd.DataFrame) -> Tuple[BayesianModel, Variabl
     return model, inference
 
 
-def network_visualisation(model: BayesianModel) -> None:
-    """Visualize the Bayesian network structure using NetworkX and Matplotlib.
 
-    Args:
-        model (BayesianModel): The Bayesian network model to visualize.
+def network_visualisation(model: BayesianModel) -> None:
     """
-    nx_graph = nx.DiGraph(model.edges())
-    plt.figure(figsize=(12, 8))
-    pos = nx.spring_layout(nx_graph, seed=42)  # Force-directed layout for reproducibility.
-    nx.draw_networkx(nx_graph, pos, node_size=1500, node_color='lightblue', arrows=True)
-    plt.title("Learned Bayesian Network from MIMIC Visits Data")
-    plt.axis("off")
-    plt.show()
+    Create an interactive visualization of a BayesianModel using Pyvis.
+    
+    Parameters:
+        model: A BayesianModel (from pgmpy) that contains your learned structure.
+    
+    The function will generate an HTML file ('bayesian_network.html') which you can open in your browser.
+    """
+    # Create a NetworkX directed graph from your model's edges.
+    G = nx.DiGraph(model.edges())
+
+    # Initialize a Pyvis network. The 'directed=True' parameter is important for Bayesian networks.
+    net = Network(height="750px", width="100%", directed=True)
+
+    # Manually add nodes with custom styling.
+    for node in model.nodes():
+        if node.startswith("diagnoses_category_"):
+            color = "lightgreen"
+        elif node.startswith("lab_category_"):
+            color = "lightblue"
+        else:
+            color = "lightgray"
+        net.add_node(node, label=node, color=color, physics=False)
+
+    # Add edges from the Bayesian model.
+    for source, target in model.edges():
+        net.add_edge(source, target)
+
+    # Specify notebook=False if you are not in a Jupyter Notebook.
+    net.show("bayesian_network.html", notebook=False)
+
 
 
 def entropy(prob_dist: np.ndarray) -> float:
@@ -110,6 +163,8 @@ def expected_entropy_for_node(candidate_node: str,
         new_evidence[candidate_node] = state
 
         # Compute the posterior for the target node with the updated evidence.
+        print(new_evidence)
+        print(target_node)
         posterior = inference.query(variables=[target_node], evidence=new_evidence)
         target_probs = posterior.values
 
@@ -118,6 +173,7 @@ def expected_entropy_for_node(candidate_node: str,
         exp_entropy += p_state * h
 
     return exp_entropy
+
 
 
 def perform_value_of_information(inference: VariableElimination,
@@ -164,7 +220,7 @@ def perform_value_of_information(inference: VariableElimination,
 
 
 
-evidence_binary = pd.DataFrame()
+evidence_binary = pd.read_csv('data/df_train.csv')
 
 # Train the Bayesian network and create an inference engine.
 model, inference = network_train(evidence_binary)
@@ -173,8 +229,8 @@ model, inference = network_train(evidence_binary)
 network_visualisation(model)
 
 # Define the target node and current evidence for inference.
-target_node = "COVID-19"
-current_evidence = {"Fever": 1, "Cough": 1}
+target_node = "diagnoses_category_gi"
+current_evidence = {"lab_category_platelets": 1, "lab_category_bun": 1}
 
 # Compute the information gain for candidate nodes.
 info_gain = perform_value_of_information(inference, model, target_node, current_evidence)
