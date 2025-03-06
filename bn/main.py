@@ -1,4 +1,4 @@
-from typing import Dict, Set, Tuple
+from typing import Dict, List, Union, Tuple
 
 from pyvis.network import Network
 import networkx as nx
@@ -7,14 +7,14 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
+import itertools
 from pgmpy.estimators import HillClimbSearch, BicScore, MaximumLikelihoodEstimator
 from pgmpy.inference import VariableElimination
-from pgmpy.models import BayesianModel
+from pgmpy.models import BayesianNetwork
 
 
 
-def network_train(evidence_binary: pd.DataFrame) -> Tuple[BayesianModel, VariableElimination]:
+def network_train(evidence_binary: pd.DataFrame) -> Tuple[BayesianNetwork, VariableElimination]:
     """Train a Bayesian network from binary evidence data.
 
     This function performs structure learning using Hill Climb Search with the Bayesian Information
@@ -55,13 +55,13 @@ def network_train(evidence_binary: pd.DataFrame) -> Tuple[BayesianModel, Variabl
                                        max_iter=5000,
                                        epsilon=1e-6,
                                        black_list=black_list,
-                                       white_list=white_list
+                                       #white_list=white_list
                                        )
     print("\nLearned Bayesian Network structure (edges):")
     print(best_model_structure.edges())
 
     
-    model = BayesianModel(best_model_structure.edges())
+    model = BayesianNetwork(best_model_structure.edges())
 
     # Parameter learning using Maximum Likelihood Estimation (MLE)
     model.fit(evidence_binary, 
@@ -80,7 +80,7 @@ def network_train(evidence_binary: pd.DataFrame) -> Tuple[BayesianModel, Variabl
 
 
 
-def network_visualisation(model: BayesianModel) -> None:
+def network_visualisation(model: BayesianNetwork) -> None:
     """
     Create an interactive visualization of a BayesianModel using Pyvis.
     
@@ -115,128 +115,116 @@ def network_visualisation(model: BayesianModel) -> None:
 
 
 def entropy(prob_dist: np.ndarray) -> float:
-    """Compute the Shannon entropy (in bits) of a probability distribution.
-
-    The entropy is defined as: H(X) = -sum(p * log2(p)) for all p > 0.
-    See: https://en.wikipedia.org/wiki/Entropy_(information_theory)
-
-    Args:
-        prob_dist (np.ndarray): An array of probabilities (should sum to 1).
-
-    Returns:
-        float: The entropy in bits.
     """
-    prob_dist = np.array(prob_dist)
-    return -np.sum([p * math.log2(p) for p in prob_dist if p > 0])
-
-
-def expected_entropy_for_node(candidate_node: str,
-                              current_evidence: dict,
-                              target_node: str,
-                              inference: VariableElimination) -> float:
-    """Calculate the expected entropy of the target node after observing a candidate node.
-
-    For each possible state of the candidate node, this function:
-      1. Computes the probability of that state given the current evidence.
-      2. Updates the evidence with the candidate node's state.
-      3. Calculates the entropy of the target node's posterior distribution.
-      4. Averages these entropies weighted by the probability of each state.
-
-    Args:
-        candidate_node (str): The variable being considered for additional observation.
-        current_evidence (dict): Existing evidence as a dictionary (e.g., {'Fever': 1, 'Cough': 1}).
-        target_node (str): The target variable whose uncertainty is to be reduced.
-        inference (VariableElimination): The inference engine for the Bayesian network.
-
-    Returns:
-        float: The expected entropy of the target node after observing the candidate node.
+    Compute the Shannon entropy (in bits) of a 1D probability distribution.
+    The distribution must sum to 1; zero-probability entries are ignored.
     """
-    # Get the marginal probability distribution for the candidate node.
+    # Use only p>0 to avoid log(0)
+    return -np.sum(p * np.log2(p) for p in prob_dist if p > 0)
+
+
+
+def expected_entropy_for_node(
+    candidate_node: str,
+    current_evidence: dict,
+    target_nodes: List[str],
+    inference: VariableElimination
+) -> float:
+
+    # Query the marginal for the candidate node given current evidence
     marginal = inference.query(variables=[candidate_node], evidence=current_evidence)
     marginal_probs = marginal.values
-
+    candidate_states = marginal.state_names[candidate_node]  # actual labels
+    
     exp_entropy = 0.0
-    # Evaluate the effect of each possible state of the candidate node.
-    for state in range(marginal_probs.shape[0]):
-        p_state = marginal_probs[state]
-        new_evidence = current_evidence.copy()
-        new_evidence[candidate_node] = state
-
-        # Compute the posterior for the target node with the updated evidence.
-        print(new_evidence)
-        print(target_node)
-        posterior = inference.query(variables=[target_node], evidence=new_evidence)
-        target_probs = posterior.values
-
-        # Calculate the entropy of the updated posterior and weight by the state's probability.
-        h = entropy(target_probs)
-        exp_entropy += p_state * h
-
+    
+    # Iterate over each possible state (label) in candidate_node
+    for i, state_label in enumerate(candidate_states):
+        p_state = marginal_probs[i]
+        
+        # Update evidence with this candidate node's state
+        new_evidence = dict(current_evidence)
+        new_evidence[candidate_node] = state_label
+        
+        # Sum entropies of each target node's posterior
+        sum_entropies = 0.0
+        for t_node in target_nodes:
+            posterior = inference.query(variables=[t_node], evidence=new_evidence)
+            sum_entropies += entropy(posterior.values)
+        
+        # Weight by probability of candidate_node = state_label
+        exp_entropy += p_state * sum_entropies
+    
     return exp_entropy
 
+def perform_value_of_information(
+    inference: VariableElimination,
+    model: BayesianNetwork,  # UPDATED parameter type
+    target_nodes: Union[str, List[str]],
+    current_evidence: dict
+) -> Dict[str, float]:
 
+    # Ensure target_nodes is a list, even if a single string is passed.
+    if isinstance(target_nodes, str):
+        target_nodes = [target_nodes]
 
-def perform_value_of_information(inference: VariableElimination,
-                                 model: BayesianModel,
-                                 target_node: str,
-                                 current_evidence: dict) -> Dict[str, float]:
-    """Compute the information gain for candidate nodes as additional observations.
+    # Compute baseline sum of entropies for the target nodes
+    baseline_entropy_sum = 0.0
+    for t_node in target_nodes:
+        posterior_target = inference.query(variables=[t_node], evidence=current_evidence)
+        baseline_entropy_sum += entropy(posterior_target.values)
 
-    This function calculates the current posterior and baseline entropy for the target node.
-    Then, for each candidate node (nodes not in the current evidence and not the target), it computes
-    the expected entropy of the target node if that candidate were observed.
-
-    Args:
-        inference (VariableElimination): The inference engine for the Bayesian network.
-        model (BayesianModel): The Bayesian network model.
-        target_node (str): The target variable for which we wish to reduce uncertainty.
-        current_evidence (dict): The currently observed evidence.
-
-    Returns:
-        Dict[str, float]: A dictionary mapping candidate nodes to their information gain (in bits).
-    """
-    # Compute the current posterior for the target node.
-    posterior_target = inference.query(variables=[target_node], evidence=current_evidence)
-    target_probs = posterior_target.values
-    baseline_entropy = entropy(target_probs)
-    print("\nCurrent posterior for '{}': {}".format(target_node, target_probs))
-    print("Baseline entropy for '{}': {:.4f} bits".format(target_node, baseline_entropy))
-
-    # Identify candidate nodes: all nodes except those already observed and the target node.
-    all_nodes: Set[str] = set(model.nodes())
-    observed_nodes: Set[str] = set(current_evidence.keys())
-    candidate_nodes: Set[str] = all_nodes - observed_nodes - {target_node}
-    print("\nCandidate nodes for additional observation:", candidate_nodes)
-
-    info_gain: Dict[str, float] = {}
-    # Compute expected entropy and information gain for each candidate node.
+    print(f"\nBaseline Entropy (sum across {target_nodes}): {baseline_entropy_sum:.4f} bits")
+    
+    # Identify candidate nodes = all nodes - already observed - target_nodes
+    all_nodes = set(model.nodes())
+    observed_nodes = set(current_evidence.keys())
+    excluded_nodes = observed_nodes.union(target_nodes)
+    candidate_nodes = all_nodes - excluded_nodes
+    
+    info_gain = {}
     for candidate in candidate_nodes:
-        exp_ent = expected_entropy_for_node(candidate, current_evidence, target_node, inference)
-        gain = baseline_entropy - exp_ent
+        # Expected sum of entropies if we observe 'candidate'
+        exp_ent = expected_entropy_for_node(candidate, current_evidence, target_nodes, inference)
+        gain = baseline_entropy_sum - exp_ent
         info_gain[candidate] = gain
-        print("Candidate: {:12s} | Expected entropy: {:.4f} bits | Information Gain: {:.4f} bits"
-              .format(candidate, exp_ent, gain))
+        
+        print(f"Candidate: {candidate:20s} | Expected Entropy: {exp_ent:.4f} | Info Gain: {gain:.4f}")
+    
     return info_gain
 
 
 
 evidence_binary = pd.read_csv('data/df_train.csv')
-
-# Train the Bayesian network and create an inference engine.
 model, inference = network_train(evidence_binary)
-
-# Visualize the learned Bayesian network.
 network_visualisation(model)
 
-# Define the target node and current evidence for inference.
-target_node = "diagnoses_category_gi"
+
 current_evidence = {"lab_category_platelets": 1, "lab_category_bun": 1}
+target_nodes = ["diagnoses_category_gi", "diagnoses_category_sepsis", "diagnoses_category_pneumonia", "diagnoses_category_aci", "diagnoses_category_chf"]
+#target_nodes = ["diagnoses_category_gi"]
 
-# Compute the information gain for candidate nodes.
-info_gain = perform_value_of_information(inference, model, target_node, current_evidence)
 
-if info_gain:
-    best_candidate = max(info_gain, key=info_gain.get)
-    print("\nRecommended additional observation: '{}'".format(best_candidate))
+results = perform_value_of_information(inference, model, target_nodes, current_evidence)
+if results:
+    best_candidate = max(results, key=results.get)
+    print(f"\nBest node to observe next: {best_candidate} (Gain = {results[best_candidate]:.4f} bits)")
 else:
     print("\nNo candidate nodes available for additional observation.")
+
+
+
+# Find the most likely outcome (argmax of probability values)
+query_result = inference.query(variables=target_nodes, evidence=current_evidence)
+
+top_indices = np.argsort(query_result.values.flatten())[-3:][::-1]
+state_combinations = list(itertools.product(*query_result.state_names.values()))
+print("Top 3 Most Likely Outcomes:")
+for i, index in enumerate(top_indices):
+    most_likely_states = state_combinations[index]
+    max_probability = query_result.values.flatten()[index]
+
+    print(f"\nRank {i+1}:")
+    for var, state in zip(query_result.state_names.keys(), most_likely_states):
+        print(f"  {var}: {state}")
+    print(f"  Probability: {max_probability:.4f}")
