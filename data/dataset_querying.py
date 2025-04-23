@@ -25,7 +25,7 @@ def export_table_to_csv(db_path, table_name, output_csv):
 
 
 db_path = "sqlite_db/mimic4.db"
-table_name = "balanced_matched_admission_labevents"
-output_csv = "data/balanced_matched_admission_labevents.csv"
+table_name = "_lab_chart_sofa_events"
+output_csv = "data/_lab_chart_sofa_events.csv"
 
 export_table_to_csv(db_path, table_name, output_csv)
