@@ -1,6 +1,6 @@
--- Merging sepsis diagnoses stays with all admission information and additional non sepsis stays
-
+-- Merging sepsis diagnoses stays with all admission information and additional non-sepsis stays
 -- CREATE INDEX idx_admissions_hadm_id ON admissions(hadm_id);
+
 DROP TABLE IF EXISTS _icustays_sepsis;
 
 CREATE TABLE _icustays_sepsis AS
@@ -57,3 +57,4 @@ CREATE INDEX idx_icustays_sepsis_hadm_id
 
 CREATE INDEX idx_icustays_sepsis_stay_id
   ON _icustays_sepsis(stay_id);
+

@@ -114,8 +114,9 @@ gcs_motor AS (
 )
 
 /* ------------ final SELECT pulled into the new table ------------ */
-SELECT
+SELECT DISTINCT
     s.hadm_id,
+    s.sepsis,
 
     /* labs */
     pao2.storetime            AS PaO2_storetime,
@@ -175,7 +176,7 @@ SELECT
     gcs_motor.valuenum        AS gcs_motor_valuenum,
     gcs_motor.valueuom        AS gcs_motor_valueuom
 
-FROM   _icustays_sepsis AS s
+FROM   _icustays_sepsis_filtered AS s
 LEFT   JOIN pao2        USING (hadm_id)
 LEFT   JOIN platelet    USING (hadm_id)
 LEFT   JOIN bilirubin   USING (hadm_id)

@@ -5,8 +5,7 @@ DROP TABLE IF EXISTS _diagnoses_icd_sepsis;
 CREATE TABLE _diagnoses_icd_sepsis AS 
 SELECT DISTINCT
     subject_id,
-    hadm_id,
-    seq_num
+    hadm_id
 FROM diagnoses_icd
 WHERE icd_code IN (SELECT icd FROM _sepsis_icd_codes);
 

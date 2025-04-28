@@ -1,78 +1,79 @@
-A021
-A207
-A227
-A267
-A327
-A392
-A393
-A394
-A400
-A401
-A403
-A408
-A409
-A4101
-A4102
-A411
-A412
-A413
-A414
-A4150
-A4151
-A4152
-A4153
-A4154
-A4159
-A4181
-A4189
-A419
-A427
-A5486
-B007
-B377
-O0337
-O0387
-O0487
-O0737
-O0882
-O85
-O8604
-P360
-P3610
-P3619
-P362
-P3630
-P3639
-P364
-P365
-P368
-P369
-R6520
-R6521
-T8112XA
-T8144XA
-0031 
-0202 
-0223 
-0362 
-0380 
-0381 
-03810
-03811
-03812
-03819
-0382 
-0383 
-03840
-03841
-03842
-03843
-03844
-03849
-0388 
-0389 
-0545 
-449  
-7907 
-99591
-99592
+A021	Salmonella sepsis
+A207	Septicemic plague
+A227	Anthrax sepsis
+A267	Erysipelothrix sepsis
+A327	Listerial sepsis
+A392	Acute meningococcemia
+A393	Chronic meningococcemia
+A394	Meningococcemia, unspecified
+A400	Sepsis due to streptococcus, group A
+A401	Sepsis due to streptococcus, group B
+A403	Sepsis due to Streptococcus pneumoniae
+A408	Other streptococcal sepsis
+A409	Streptococcal sepsis, unspecified
+A4101	Sepsis due to Methicillin susceptible Staphylococcus aureus
+A4102	Sepsis due to Methicillin resistant Staphylococcus aureus
+A411	Sepsis due to other specified staphylococcus
+A412	Sepsis due to unspecified staphylococcus
+A413	Sepsis due to Hemophilus influenzae
+A414	Sepsis due to anaerobes
+A4150	Gram-negative sepsis, unspecified
+A4151	Sepsis due to Escherichia coli [E. coli]
+A4152	Sepsis due to Pseudomonas
+A4153	Sepsis due to Serratia
+A4154	Sepsis due to Acinetobacter baumannii
+A4159	Other Gram-negative sepsis
+A4181	Sepsis due to Enterococcus
+A4189	Other specified sepsis
+A419	Sepsis, unspecified organism
+A427	Actinomycotic sepsis
+A5486	Gonococcal sepsis
+B007	Disseminated herpesviral disease
+B377	Candidal sepsis
+O0337	Sepsis following incomplete spontaneous abortion
+O0387	Sepsis following complete or unspecified spontaneous abortion
+O0487	Sepsis following (induced) termination of pregnancy
+O0737	Sepsis following failed attempted termination of pregnancy
+O0882	Sepsis following ectopic and molar pregnancy
+O85	Puerperal sepsis
+O8604	Sepsis following an obstetrical procedure
+P360	Sepsis of newborn due to streptococcus, group B
+P3610	Sepsis of newborn due to unspecified streptococci
+P3619	Sepsis of newborn due to other streptococci
+P362	Sepsis of newborn due to Staphylococcus aureus
+P3630	Sepsis of newborn due to unspecified staphylococci
+P3639	Sepsis of newborn due to other staphylococci
+P364	Sepsis of newborn due to Escherichia coli
+P365	Sepsis of newborn due to anaerobes
+P368	Other bacterial sepsis of newborn
+P369	Bacterial sepsis of newborn, unspecified
+R6520	Severe sepsis without septic shock
+R6521	Severe sepsis with septic shock
+T8112XA	Postprocedural septic shock, initial encounter
+T8144XA	Sepsis following a procedure, initial encounter
+0031 	SALMONELLA SEPTICEMIA
+0202 	SEPTICEMIC PLAGUE
+0223 	ANTHRAX SEPTICEMIA
+0362 	MENINGOCOCCEMIA
+0380 	STREPTOCOCCAL SEPTICEMIA
+0381 	STAPHYLOCOCC SEPTICEMIA (End 1997)
+03810	STAPH SEPTICEMIA- UNSPEC (Begin 1997)
+03811	STAPH AUREUS SEPTICEMIA (Begin 1997)
+03812	MRSA SEPTICEMIA (Begin 2008)
+03819	OT STAPH SEPTICEMIA (Begin 1997)
+0382 	PNEUMOCOCCAL SEPTICEMIA
+0383 	ANAEROBIC SEPTICEMIA
+03840	GRAM-NEG SEPTICEMIA NOS
+03841	H. INFLUENAE SEPTICEMIA
+03842	E COLI SEPTICEMIA
+03843	PSEUDOMONAS SEPTICEMIA
+03844	SERRATIA SEPTICEMIA
+03849	GRAM-NEG SEPTICEMIA NEC
+0388 	SEPTICEMIA NEC
+0389 	SEPTICEMIA NOS
+0545 	HERPETIC SEPTICEMIA
+449  	SEPTIC ARTERIAL EMBOLISM (Begin 2007)
+77181	SEPTICEMIA [SEPSIS] OF NEWBORN (Begin 2002)
+7907 	BACTEREMIA NOS
+99591	SYS INFLAM / INFECTI W/O ORGAN DYSFUNC (Begin 2002)
+99592	SYS INFLAM / INFECTI W ORGAN DYSFUNCTI (Begin 2002)
