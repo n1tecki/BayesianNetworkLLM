@@ -17,7 +17,7 @@ def execute_sql_files(db_path, sql_files):
                 cursor.executescript(sql_script)
                 print(f"Executed: {sql_file}")
 
-        conn.commit()  # Commit in case scripts modified the database
+        conn.commit()
         print("\nAll SQL scripts executed successfully.")
 
     except sqlite3.Error as e:
@@ -30,7 +30,9 @@ def execute_sql_files(db_path, sql_files):
 sql_scripts = [
     "sqlite_db/query_scripts/diagnoses_icd_sepsis.sql",  # Selecting all patients and stays with sepsis diagnosis
     "sqlite_db/query_scripts/icustays_sepsis.sql", # Merging sepsis stays with admission information
-    "sqlite_db/query_scripts/lab_chart_sofa_events.sql", # Selecting all lab events and chart events related to sofa for sepsis patients 
+    "sqlite_db/query_scripts/icustays_sepsis_filtered.sql", # Filter icu stays for minimum duration and no returning patients
+    "sqlite_db/query_scripts/lab_chart_sofa_events.sql", # Selecting all lab events and chart events related to sofa for sepsis patients
+    "sqlite_db/query_scripts/first_sepsis_action.sql", # Selecting all first sepsis actions for sepsis patients
 ]
 
 execute_sql_files("sqlite_db/mimic4.db", sql_scripts)
