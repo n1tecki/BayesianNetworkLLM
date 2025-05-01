@@ -1,74 +1,80 @@
 import pandas as pd
-from utils import export_table_to_csv, df_to_temporal
-from sofa_classification import compute_sofa_scores, classify_sofa_stays
-from preprocessing import clean_bloodgas
-from stats import value_stats
+from utils import export_table_to_csv
+from sofa_classification import compute_sofa_scores, classify_sofa_stays, sofa_classification
+from preprocessing import clean_bloodgas, gcs_motor_to_numeric, df_to_temporal, forward_fill, adding_sofa_classification, clean_min_max
+from stats import lab_value_counts, count_leading_zeros_before_sepsis, sepsis_duration_count, sepsis_nonsepsis_count, plot_distribution_with_bell
+
+
+# For the paper here clean the extreme values of each lab value. Report how many got caught and replaced.
+# Then plot the distribution of the lab values.
+# Also report on the  replacement og gcs_motoric names with the scores. 
+# After that also report on the stats like amount of timestamp distribution.
+# Then report also on the amount of false classification of sepsis when only taking the sofa score.
+
 
 # This script exports a table from the SQLite database to a CSV file
-db_path = "sqlite_db/mimic4.db"
-table_name = "_lab_chart_sofa_events"
-output_csv = "data/_lab_chart_sofa_events.csv"
+# db_path = "sqlite_db/mimic4.db"
+# table_name = "_lab_chart_sofa_events"
+# output_csv = "data/_lab_chart_sofa_events.csv"
 # export_table_to_csv(db_path, table_name, output_csv)
+
 
 # Load the data and transform it into a temporal dataframe to CSV file
 df = pd.read_csv('data/_lab_chart_sofa_events.csv')
 labels_df = df[['hadm_id', 'sepsis']]
-temporal_df = df_to_temporal(df)
 
 
 # ------------------- DATA PREPROCESSING ------------------------------
-wide_temporal_df = temporal_df.pivot_table(
-    index=['hadm_id', 'timestamp'],
-    columns='variable',
-    values='value',
-    aggfunc='first'
-)
-wide_temporal_df = clean_bloodgas(wide_temporal_df, fio2_col='FiO2', pao2_col='PaO2')
+temporal_df = df_to_temporal(df)
+raw_lab_count_stats = lab_value_counts(temporal_df)
+temporal_df_clean = clean_bloodgas(temporal_df, fio2_col='FiO2', pao2_col='PaO2')
+temporal_df_clean = gcs_motor_to_numeric(temporal_df_clean)
+temporal_df_clean = clean_min_max(temporal_df_clean, column='bilirubin_total', min_val=.1, max_val=50, replace=False)
+temporal_df_clean = clean_min_max(temporal_df_clean, column='creatinin', min_val=.2, max_val=20, replace=False)
+temporal_df_clean = clean_min_max(temporal_df_clean, column='mean_arterial_pressure', min_val=20, max_val=200, replace=False)
+temporal_df_clean = clean_min_max(temporal_df_clean, column='platelet_count', min_val=10, max_val=1000, replace=False)
+clean_temporal_df_ff = forward_fill(temporal_df_clean)
 
 
 # ------------------- SOFA SORTING ------------------------------------
-# Forward fill the lab values
-all_sofa_vars = sorted(wide_temporal_df.columns.tolist())
-wide_forward_temporal_df = wide_temporal_df.groupby(level=0)[all_sofa_vars].ffill()
-# Compute the SOFA classification of each lab values
-sofa_df = compute_sofa_scores(wide_forward_temporal_df)
-
-# Classify from which timestap on sepsis was diagnosed, except stays with no sepsis diagnoses
-sofa_df_classified = classify_sofa_stays(sofa_df, labels_df)
-
-# Print example value
-first_hadm = sofa_df_classified.index.unique(level=0)[1]
-print(wide_forward_temporal_df.loc[first_hadm])
-print(sofa_df_classified.loc[first_hadm])
+sofa_df = compute_sofa_scores(clean_temporal_df_ff)
+sofa_df_sofa_classification = sofa_classification(sofa_df)
+sofa_df_diagnoses_classified = classify_sofa_stays(sofa_df_sofa_classification, labels_df)
+clean_temporal_df_ff_sepsis = adding_sofa_classification(clean_temporal_df_ff, sofa_df_diagnoses_classified)
 
 
 # ------------------- STATISTICS --------------------------------------
-# Summarise the count of lab values for a specific variable
-all_sofa_vars = sorted(wide_temporal_df.columns.tolist())
-lab_count_stats = value_stats(wide_temporal_df, all_sofa_vars)
-for var, res in lab_count_stats.items():
-    print(f"\n{var} counts:")
-    print(res.counts)
-    print(f"Admissions with {var}: {res.n_hadm}")
+lab_count_stats = lab_value_counts(temporal_df_clean)
+stay_timesteps_stats = sepsis_duration_count(sofa_df_diagnoses_classified)
+sepsis_by_diagnoses = sepsis_nonsepsis_count(sofa_df_diagnoses_classified)
+sepsis_by_sofa = sepsis_nonsepsis_count(sofa_df_diagnoses_classified)
+duration_before_sofa = count_leading_zeros_before_sepsis(sofa_df_diagnoses_classified)
 
-# Get stats aboiut the amount of timestamp events stays have
-stay_lengths = sofa_df_classified.groupby('hadm_id').size()
-dist = stay_lengths.value_counts().sort_index()
-stay_timesteps_stats = (
-    dist
-    .rename_axis('rows_per_stay')
-    .reset_index(name='num_stays')
-)
-print(stay_timesteps_stats)
 
-# Print the amount of sepsis and non sepsis stays by diagnosis
-stay_sepsis_flag = sofa_df_classified.groupby('hadm_id')['sepsis'].max()
-counts = stay_sepsis_flag.value_counts().sort_index()
-counts.index = ['no_sepsis', 'sepsis']
-print(counts)
+# Print example value
+first_hadm = sofa_df_diagnoses_classified.index.unique(level=0)[1]
+print(clean_temporal_df_ff_sepsis.loc[first_hadm])
+print(sofa_df_diagnoses_classified.loc[first_hadm])
 
-# Print the amount of sepsis and non sepsis stays by SEPSIS score
-stay_sepsis_flag = sofa_df.groupby('hadm_id')['sepsis'].max()
-counts = stay_sepsis_flag.value_counts().sort_index()
-counts.index = ['no_sepsis', 'sepsis']
-print(counts)
+# plot_distribution_with_bell(raw_lab_count_stats['platelet_count'])
+# plot_distribution_with_bell(raw_lab_count_stats['mean_arterial_pressure'])
+# plot_distribution_with_bell(raw_lab_count_stats['creatinin'])
+# plot_distribution_with_bell(raw_lab_count_stats['bilirubin_total'])
+# plot_distribution_with_bell(raw_lab_count_stats['gcs_verbal'])
+# plot_distribution_with_bell(raw_lab_count_stats['gcs_motor'])
+# plot_distribution_with_bell(raw_lab_count_stats['gcs_eye'])
+# plot_distribution_with_bell(raw_lab_count_stats['PaO2'])
+# plot_distribution_with_bell(raw_lab_count_stats['FiO2'])
+
+# plot_distribution_with_bell(lab_count_stats['platelet_count'])
+# plot_distribution_with_bell(lab_count_stats['mean_arterial_pressure'])
+# plot_distribution_with_bell(lab_count_stats['creatinin'])
+# plot_distribution_with_bell(lab_count_stats['bilirubin_total'])
+# plot_distribution_with_bell(lab_count_stats['gcs_verbal'])
+# plot_distribution_with_bell(lab_count_stats['gcs_motor'])
+# plot_distribution_with_bell(lab_count_stats['gcs_eye'])
+# plot_distribution_with_bell(lab_count_stats['PaO2'])
+# plot_distribution_with_bell(lab_count_stats['FiO2'])
+
+clean_temporal_df_ff_sepsis.to_csv('data/raw_df_classified.csv', index=True, index_label=['hadm_id', 'timestamp'])
+sofa_df_diagnoses_classified.to_csv('data/sofa_df_classified.csv', index=True, index_label=['hadm_id', 'timestamp'])
