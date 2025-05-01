@@ -1,15 +1,11 @@
 import pandas as pd
 import numpy as np
 
+
+# Classify trhe lab values to the SOFA classification
 def compute_sofa_scores(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Input: tall DataFrame with columns [hadm_id, timestamp, variable, value].
-    Output: wide DataFrame indexed by (hadm_id, timestamp) with columns
-      [resp_score, coag_score, hepatic_score, cv_score,
-       cns_score, renal_score, sofa_total].
-    """
     # 1) Make a copy of the df
-    wide = df.copy()
+    df_local = df.copy()
 
     # 2) Ensure numeric types for the labs/vitals
     num_cols = [
@@ -19,25 +15,14 @@ def compute_sofa_scores(df: pd.DataFrame) -> pd.DataFrame:
         'gcs_eye', 'gcs_verbal'
     ]
     for col in num_cols:
-        if col in wide:
-            wide[col] = pd.to_numeric(wide[col], errors='coerce')
+        if col in df_local:
+            df_local[col] = pd.to_numeric(df_local[col], errors='coerce')
 
-    # 3) Map gcs_motor string → numeric
-    verbal_map = {
-        'Normal': 5,
-        'Slurred': 4,
-        'Garbled': 3,
-        'Aphasic': 2,
-        'Mute': 1,
-        'Intubated/trached': 1
-    }
-    wide['gcs_motor_score'] = wide.get('gcs_motor', pd.Series()).map(verbal_map)
+    # 3) Compute PF ratio and ventilator flag
+    df_local['pf_ratio'] = df_local['PaO2'] / (df_local['FiO2'] / 100)
+    df_local['ventilated'] = df_local.get('gcs_motor', '') == 'Intubated/trached'
 
-    # 4) Compute PF ratio and ventilator flag
-    wide['pf_ratio'] = wide['PaO2'] / (wide['FiO2'] / 100)
-    wide['ventilated'] = wide.get('gcs_motor', '') == 'Intubated/trached'
-
-    # 5) Define scoring functions
+    # 4) Define scoring functions
     def resp_score(r, vent):
         if pd.isna(r): 
             return np.nan
@@ -76,11 +61,11 @@ def compute_sofa_scores(df: pd.DataFrame) -> pd.DataFrame:
 
         eye   = row['gcs_eye'] if not np.isnan(row['gcs_eye']) else 4
         verbal= row['gcs_verbal'] if not np.isnan(row['gcs_verbal']) else 5
-        motor = row['gcs_motor_score'] if not np.isnan(row['gcs_motor_score']) else 6
+        motor = row['gcs_motor'] if not np.isnan(row['gcs_motor']) else 6
         total_gcs = eye + verbal + motor
 
         if pd.isna(total_gcs): return np.nan
-        if total_gcs == 15:   return 0
+        if total_gcs >= 15:   return 0
         if total_gcs >= 13:   return 1
         if total_gcs >= 10:   return 2
         if total_gcs >= 6:    return 3
@@ -94,51 +79,52 @@ def compute_sofa_scores(df: pd.DataFrame) -> pd.DataFrame:
         if cr < 5.0:  return 3
         return 4
 
-    # 6) Apply them
-    wide['resp_score'] = wide.apply(
+    # 5) Apply them
+    df_local['resp_score'] = df_local.apply(
         lambda row: resp_score(row['pf_ratio'], row['ventilated']), axis=1
     )
-    wide['coag_score']    = wide['platelet_count'].apply(coag_score)
-    wide['hepatic_score'] = wide['bilirubin_total'].apply(hepatic_score)
-    wide['cv_score']      = wide['mean_arterial_pressure'].apply(cv_score)
+    df_local['coag_score']    = df_local['platelet_count'].apply(coag_score)
+    df_local['hepatic_score'] = df_local['bilirubin_total'].apply(hepatic_score)
+    df_local['cv_score']      = df_local['mean_arterial_pressure'].apply(cv_score)
 
     # Combine the three GCS subcomponents into total GCS, then score CNS
-    wide['cns_score'] = wide.apply(cns_score, axis=1)
+    df_local['cns_score'] = df_local.apply(cns_score, axis=1)
 
-    wide['renal_score'] = wide['creatinin'].apply(renal_score)
+    df_local['renal_score'] = df_local['creatinin'].apply(renal_score)
 
-    # 7) Sort by hadm_id, then time, forward‐fill & default‐0, then sum
+    # 6) Sort by hadm_id, then time, forward‐fill & default‐0, then sum
     comp_cols = [
         'resp_score', 'coag_score', 'hepatic_score',
         'cv_score', 'cns_score', 'renal_score'
     ]
 
-    wide = wide.sort_index(level=['hadm_id', 'timestamp'])
-    # wide[comp_cols] = (
-    #     wide
-    #     .groupby(level=0)[comp_cols]
-    #     .ffill()        # carry last known score forward
-    #     .fillna(0)      # if never measured, assume 0
-    # )
+    df_local = df_local.sort_index(level=['hadm_id', 'timestamp'])
 
-    wide['sofa_total'] = wide[comp_cols].sum(axis=1)
+    df_local['sofa_total'] = df_local[comp_cols].sum(axis=1)
 
-    # 8) Return only the scores, still indexed by (hadm_id, timestamp)
-    return wide[comp_cols + ['sofa_total']]
+    # 7) Return only the scores, still indexed by (hadm_id, timestamp)
+    return df_local[comp_cols + ['sofa_total']]
 
 
-def classify_sofa_stays(sofa_df, labels_df):
-    df = sofa_df.copy()
-    # Classify from which timestap on sepsis was diagnosed, except stays with no sepsis diagnoses
-    df['sepsis'] = (df['sofa_total'] >= 2).astype(int)
+# Classify from which timestap on sepsis was diagnosed, except stays with no sepsis diagnoses
+def classify_sofa_stays(df, labels_df):
+    df_local = df.copy()
 
     # Build a dict mapping hadm_id → stay‐level sepsis label
     label_map = labels_df.set_index('hadm_id')['sepsis'].to_dict()
 
-    # Get an array of stay‐level labels aligned to each sofa_df row
-    stay_labels = df.index.get_level_values('hadm_id').map(label_map)
+    # Get an array of stay‐level labels aligned to each df_local row
+    stay_labels = df_local.index.get_level_values('hadm_id').map(label_map)
 
     # Wherever the stay label == 0, force sub‐row sepsis to 0
-    df.loc[stay_labels == 0, 'sepsis'] = 0 
+    df_local.loc[stay_labels == 0, 'sepsis'] = 0 
 
-    return df
+    return df_local
+
+
+# Classify from which timestap on sepsis was diagnosed, taking SOFA classification
+def sofa_classification(df):
+    df_local = df.copy()
+    df_local['sepsis'] = (df_local['sofa_total'] >= 2).astype(int)
+
+    return df_local
