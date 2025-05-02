@@ -1,8 +1,8 @@
 import pandas as pd
-from utils import export_table_to_csv
-from sofa_classification import compute_sofa_scores, classify_sofa_stays, sofa_classification
-from preprocessing import clean_bloodgas, gcs_motor_to_numeric, df_to_temporal, forward_fill, adding_sofa_classification, clean_min_max
-from stats import lab_value_counts, count_leading_zeros_before_sepsis, sepsis_duration_count, sepsis_nonsepsis_count, plot_distribution_with_bell
+from src.processing_utils.utils import export_table_to_csv
+from src.processing_utils.sofa_classification import compute_sofa_scores, classify_sofa_stays, sofa_classification, adding_sepsis_classification_per_stay
+from src.processing_utils.preprocessing import clean_bloodgas, gcs_motor_to_numeric, df_to_temporal, forward_fill, adding_sofa_classification, clean_min_max
+from src.processing_utils.stats import lab_value_counts, count_leading_zeros_before_sepsis, sepsis_duration_count, sepsis_nonsepsis_count, plot_distribution_with_bell
 
 
 # For the paper here clean the extreme values of each lab value. Report how many got caught and replaced.
@@ -10,6 +10,7 @@ from stats import lab_value_counts, count_leading_zeros_before_sepsis, sepsis_du
 # Also report on the  replacement og gcs_motoric names with the scores. 
 # After that also report on the stats like amount of timestamp distribution.
 # Then report also on the amount of false classification of sepsis when only taking the sofa score.
+# Add that during training the spesis scores are set to priors like .8/.2 not hard 1/0 in order to not overfit the model / is a moderate nudge.
 
 
 # This script exports a table from the SQLite database to a CSV file
@@ -21,7 +22,7 @@ from stats import lab_value_counts, count_leading_zeros_before_sepsis, sepsis_du
 
 # Load the data and transform it into a temporal dataframe to CSV file
 df = pd.read_csv('data/_lab_chart_sofa_events.csv')
-labels_df = df[['hadm_id', 'sepsis']]
+labels_df = df[['hadm_id', 'sepsis']].reset_index()
 
 
 # ------------------- DATA PREPROCESSING ------------------------------
@@ -40,7 +41,9 @@ clean_temporal_df_ff = forward_fill(temporal_df_clean)
 sofa_df = compute_sofa_scores(clean_temporal_df_ff)
 sofa_df_sofa_classification = sofa_classification(sofa_df)
 sofa_df_diagnoses_classified = classify_sofa_stays(sofa_df_sofa_classification, labels_df)
-clean_temporal_df_ff_sepsis = adding_sofa_classification(clean_temporal_df_ff, sofa_df_diagnoses_classified)
+clean_temporal_df_ff_supervised = adding_sofa_classification(clean_temporal_df_ff, sofa_df_diagnoses_classified)
+clean_temporal_df_ff_semisupervised = adding_sepsis_classification_per_stay(clean_temporal_df_ff, labels_df)
+clean_temporal_df_ff_unsupervised = clean_temporal_df_ff.copy()
 
 
 # ------------------- STATISTICS --------------------------------------
@@ -53,7 +56,7 @@ duration_before_sofa = count_leading_zeros_before_sepsis(sofa_df_diagnoses_class
 
 # Print example value
 first_hadm = sofa_df_diagnoses_classified.index.unique(level=0)[1]
-print(clean_temporal_df_ff_sepsis.loc[first_hadm])
+print(clean_temporal_df_ff_supervised.loc[first_hadm])
 print(sofa_df_diagnoses_classified.loc[first_hadm])
 
 # plot_distribution_with_bell(raw_lab_count_stats['platelet_count'])
@@ -76,5 +79,7 @@ print(sofa_df_diagnoses_classified.loc[first_hadm])
 # plot_distribution_with_bell(lab_count_stats['PaO2'])
 # plot_distribution_with_bell(lab_count_stats['FiO2'])
 
-clean_temporal_df_ff_sepsis.to_csv('data/raw_df_classified.csv', index=True, index_label=['hadm_id', 'timestamp'])
-sofa_df_diagnoses_classified.to_csv('data/sofa_df_classified.csv', index=True, index_label=['hadm_id', 'timestamp'])
+clean_temporal_df_ff_unsupervised.to_parquet('data/unsupervised_df_classified.parquet', engine='pyarrow')
+clean_temporal_df_ff_semisupervised.to_parquet('data/semisupervised_df_classified.parquet', engine='pyarrow')
+clean_temporal_df_ff_supervised.to_parquet('data/supervisedraw_df_classified.parquet', engine='pyarrow')
+sofa_df_diagnoses_classified.to_parquet('data/sofa_df_classified.parquet', engine='pyarrow')
