@@ -98,7 +98,7 @@ gcs_verbal AS (
         SELECT ce.*,
                ROW_NUMBER() OVER (PARTITION BY hadm_id ORDER BY charttime ASC) AS rn
         FROM chartevents ce
-        WHERE itemid IN (723,223900)
+        WHERE itemid IN (723, 223900)
     )
     WHERE rn = 1
 ),
@@ -108,7 +108,7 @@ gcs_motor AS (
         SELECT ce.*,
                ROW_NUMBER() OVER (PARTITION BY hadm_id ORDER BY charttime ASC) AS rn
         FROM chartevents ce
-        WHERE itemid IN (454,223901)
+        WHERE itemid IN (454, 223901)
     )
     WHERE rn = 1
 )
