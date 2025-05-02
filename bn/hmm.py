@@ -9,69 +9,50 @@ from tqdm.auto import tqdm
 from sklearn.metrics import roc_auc_score
 
 from pomegranate.hmm import DenseHMM
-from pomegranate.distributions import Normal          # <— the ONLY option in 1.1.2
+from pomegranate.distributions import Normal
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ---------------------------------------------------------------------
-# helper that makes a diagonal-covariance Normal(d) for pomegranate 1.1.2
-# ---------------------------------------------------------------------
-def make_diag_normal(dim: int) -> Normal:
-    """Return pomegranate.distributions.Normal with diagonal Σ (length=dim)."""
-    means      = [0.0] * dim           # shape (dim,)
-    variances  = [1.0] * dim           # shape (dim,)
-    return Normal(means, variances, covariance_type="diag")  # diag ⇒ independent
 
-# =====================================================================
-# 1) load & *clean* data  ➜  multi-index DataFrame
 # ---------------------------------------------------------------------
+# Load data, drop features that are entirely NaN, and (hadm_id, sepsis) groups that contain no measurement 
 PARQUET_PATH = "data/semisupervised_df_classified.parquet"
 df = pd.read_parquet(PARQUET_PATH).sort_index()
-
-# 1a) drop features that are entirely NaN
 df = df.dropna(axis=1, how="all")
-
-# 1b) drop (hadm_id, sepsis) groups that contain no measurement at all
 df = df.groupby(level=[0, 1]).filter(lambda g: g.notna().any().any())
+d = len(df.columns.tolist())
 
-FEATURES = df.columns.tolist()
-d        = len(FEATURES)
-print(f"[INFO] {d} numeric features kept after cleaning.")
 
-# =====================================================================
-# 2) dataframe  ➜  torch sequences + soft priors
 # ---------------------------------------------------------------------
+# Transform df into torch sequence and soft priors → 70 % sepsis state, 30 % the other
 X_seqs, priors_list, y_stay = [], [], []
-
 for (hid, sepsis_flag), grp in tqdm(df.groupby(level=[0, 1], sort=False),
                                     desc="building sequences"):
     x = torch.tensor(grp.to_numpy(float),
                      dtype=torch.float32,
-                     device=DEVICE)                       # (T, d)
-
-    # double-check: skip sequences that are *still* all-NaN
-    if torch.isnan(x).all():
-        continue
+                     device=DEVICE)
 
     X_seqs.append(x)
     y_stay.append(int(sepsis_flag))
 
-    # soft per-row prior → 70 % “matching” state, 30 % the other
-    T   = x.shape[0]
+    T = x.shape[0]
     pri = torch.full((T, 2), 0.3, dtype=torch.float32, device=DEVICE)
     pri[:, sepsis_flag] = 0.7
     priors_list.append(pri)
 
 print(f"[INFO] {len(X_seqs)} stays will be used for training.")
 
-# =====================================================================
-# 3) pad sequences  +  build masks
+
+
 # ---------------------------------------------------------------------
+# Padding the sequences and creating the appropriate mask
 X_padded = pad_sequence(X_seqs, batch_first=True, padding_value=float("nan"))
-obs_mask = ~torch.isnan(X_padded)                         # (B, max_T, d)
+obs_mask = ~torch.isnan(X_padded)
 
 P_padded  = pad_sequence(priors_list, batch_first=True, padding_value=0.5)
 prior_mask = ~torch.isnan(P_padded[..., 0]).unsqueeze(-1).expand_as(P_padded)
+
+
 
 # =====================================================================
 # 4) build & fit the semi-supervised DenseHMM
@@ -79,11 +60,17 @@ prior_mask = ~torch.isnan(P_padded[..., 0]).unsqueeze(-1).expand_as(P_padded)
 hmm = DenseHMM(max_iter=40, tol=1e-3, verbose=True).to(DEVICE)
 
 # two latent states, each with its own diagonal Normal(d)
-hmm.add_distribution(make_diag_normal(d))
-hmm.add_distribution(make_diag_normal(d))
-# (no add_edge ⇒ uniform fully-connected transition matrix)
+norm_dis = Normal([0.0] * d, [1.0] * d, covariance_type="diag")
+hmm.add_distribution(norm_dis)
+hmm.add_distribution(norm_dis)
 
+hmm._initialize((X_padded, obs_mask))
 hmm.fit((X_padded, obs_mask), priors=(P_padded, prior_mask))
+
+
+#hmm = DenseHMM([make_diag_normal(d), make_diag_normal(d)], max_iter=40, tol=1e-3, verbose=True).to(DEVICE)
+
+
 
 # =====================================================================
 # 5) posterior inference  +  quick metrics
