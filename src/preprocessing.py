@@ -3,7 +3,7 @@ from src.processing_utils.utils import export_table_to_csv
 from src.processing_utils.sofa_classification import compute_sofa_scores, classify_sofa_stays, sofa_classification, adding_sepsis_classification_per_stay
 from src.processing_utils.preprocessing import clean_bloodgas, gcs_motor_to_numeric, df_to_temporal, forward_fill, adding_sofa_classification, clean_min_max
 from src.processing_utils.stats import lab_value_counts, count_leading_zeros_before_sepsis, sepsis_duration_count, sepsis_nonsepsis_count, plot_distribution_with_bell
-
+from src.processing_utils.data_binning import data_into_bins
 
 # For the paper here clean the extreme values of each lab value. Report how many got caught and replaced.
 # Then plot the distribution of the lab values.
@@ -44,6 +44,7 @@ sofa_df_diagnoses_classified = classify_sofa_stays(sofa_df_sofa_classification, 
 clean_temporal_df_ff_supervised = adding_sofa_classification(clean_temporal_df_ff, sofa_df_diagnoses_classified)
 clean_temporal_df_ff_semisupervised = adding_sepsis_classification_per_stay(clean_temporal_df_ff, labels_df)
 clean_temporal_df_ff_unsupervised = clean_temporal_df_ff.copy()
+binned_train_data = data_into_bins(clean_temporal_df_ff_semisupervised, N_BINS=2)
 
 
 # ------------------- STATISTICS --------------------------------------
@@ -54,7 +55,7 @@ sepsis_by_sofa = sepsis_nonsepsis_count(sofa_df_diagnoses_classified)
 duration_before_sofa = count_leading_zeros_before_sepsis(sofa_df_diagnoses_classified)
 
 
-# Print example value
+# Graphs and stats ----------------------------------------------------
 first_hadm = sofa_df_diagnoses_classified.index.unique(level=0)[1]
 print(clean_temporal_df_ff_supervised.loc[first_hadm])
 print(sofa_df_diagnoses_classified.loc[first_hadm])
@@ -83,3 +84,4 @@ clean_temporal_df_ff_unsupervised.to_parquet('data/unsupervised_df_classified.pa
 clean_temporal_df_ff_semisupervised.to_parquet('data/semisupervised_df_classified.parquet', engine='pyarrow')
 clean_temporal_df_ff_supervised.to_parquet('data/supervisedraw_df_classified.parquet', engine='pyarrow')
 sofa_df_diagnoses_classified.to_parquet('data/sofa_df_classified.parquet', engine='pyarrow')
+binned_train_data.to_parquet('data/binned_train_data.parquet', engine='pyarrow')
