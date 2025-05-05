@@ -1,9 +1,9 @@
 import pandas as pd
-from src.processing_utils.utils import export_table_to_csv
-from src.processing_utils.sofa_classification import compute_sofa_scores, classify_sofa_stays, sofa_classification, adding_sepsis_classification_per_stay
-from src.processing_utils.preprocessing import clean_bloodgas, gcs_motor_to_numeric, df_to_temporal, forward_fill, adding_sofa_classification, clean_min_max
-from src.processing_utils.stats import lab_value_counts, count_leading_zeros_before_sepsis, sepsis_duration_count, sepsis_nonsepsis_count, plot_distribution_with_bell
-from src.processing_utils.data_binning import data_into_bins
+from src.preprocessing.sofa_classification import compute_sofa_scores, classify_sofa_stays, sofa_classification, adding_sepsis_classification_per_stay
+from src.preprocessing.preprocessing import clean_bloodgas, gcs_motor_to_numeric, df_to_temporal, forward_fill, adding_sofa_classification, clean_min_max
+from src.preprocessing.stats import lab_value_counts, count_leading_zeros_before_sepsis, sepsis_duration_count, sepsis_nonsepsis_count, plot_distribution_with_bell
+from src.preprocessing.data_binning import data_into_bins
+
 
 # For the paper here clean the extreme values of each lab value. Report how many got caught and replaced.
 # Then plot the distribution of the lab values.
@@ -11,13 +11,6 @@ from src.processing_utils.data_binning import data_into_bins
 # After that also report on the stats like amount of timestamp distribution.
 # Then report also on the amount of false classification of sepsis when only taking the sofa score.
 # Add that during training the spesis scores are set to priors like .8/.2 not hard 1/0 in order to not overfit the model / is a moderate nudge.
-
-
-# This script exports a table from the SQLite database to a CSV file
-# db_path = "sqlite_db/mimic4.db"
-# table_name = "_lab_chart_sofa_events"
-# output_csv = "data/_lab_chart_sofa_events.csv"
-# export_table_to_csv(db_path, table_name, output_csv)
 
 
 # Load the data and transform it into a temporal dataframe to CSV file
@@ -44,7 +37,7 @@ sofa_df_diagnoses_classified = classify_sofa_stays(sofa_df_sofa_classification, 
 clean_temporal_df_ff_supervised = adding_sofa_classification(clean_temporal_df_ff, sofa_df_diagnoses_classified)
 clean_temporal_df_ff_semisupervised = adding_sepsis_classification_per_stay(clean_temporal_df_ff, labels_df)
 clean_temporal_df_ff_unsupervised = clean_temporal_df_ff.copy()
-binned_train_data = data_into_bins(clean_temporal_df_ff_semisupervised, N_BINS=2)
+binned_train_data = data_into_bins(clean_temporal_df_ff_semisupervised, N_BINS=4)
 
 
 # ------------------- STATISTICS --------------------------------------
