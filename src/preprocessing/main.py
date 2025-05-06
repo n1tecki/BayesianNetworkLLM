@@ -1,5 +1,5 @@
 import pandas as pd
-from src.preprocessing.sofa_classification import compute_sofa_scores, classify_sofa_stays, sofa_classification, adding_sepsis_classification_per_stay
+from src.preprocessing.sofa_classification import compute_sofa_scores, classify_sofa_stays, sofa_classification, adding_sepsis_classification_per_stay, cns_transformation
 from src.preprocessing.preprocessing import clean_bloodgas, gcs_motor_to_numeric, df_to_temporal, forward_fill, adding_sofa_classification, clean_min_max
 from src.preprocessing.stats import lab_value_counts, count_leading_zeros_before_sepsis, sepsis_duration_count, sepsis_nonsepsis_count, plot_distribution_with_bell
 from src.preprocessing.data_binning import data_into_bins
@@ -27,6 +27,7 @@ temporal_df_clean = clean_min_max(temporal_df_clean, column='bilirubin_total', m
 temporal_df_clean = clean_min_max(temporal_df_clean, column='creatinin', min_val=.2, max_val=20, replace=False)
 temporal_df_clean = clean_min_max(temporal_df_clean, column='mean_arterial_pressure', min_val=20, max_val=200, replace=False)
 temporal_df_clean = clean_min_max(temporal_df_clean, column='platelet_count', min_val=10, max_val=1000, replace=False)
+temporal_df_clean = cns_transformation(temporal_df_clean)
 clean_temporal_df_ff = forward_fill(temporal_df_clean)
 
 
