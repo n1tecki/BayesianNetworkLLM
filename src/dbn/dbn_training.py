@@ -11,11 +11,6 @@ def flatten_df(df, LAB_COLS):
     # — Configuration ——————————————————————————————————————————
     df = df.groupby(level="hadm_id").filter(lambda group: len(group) > 1)
 
-    # Reading as int8 to reduce memory usage
-    cat_cols = ['sepsis'] + LAB_COLS
-    for c in cat_cols:
-        df[c] = pd.Categorical(df[c]).codes.astype('int8')
-
     # Flatten dataframe into two time slices (t0 -> t1)
     def two_slice(df, labs):
         base = ["sepsis"] + labs

@@ -37,7 +37,7 @@ sofa_df_diagnoses_classified = classify_sofa_stays(sofa_df_sofa_classification, 
 clean_temporal_df_ff_supervised = adding_sofa_classification(clean_temporal_df_ff, sofa_df_diagnoses_classified)
 clean_temporal_df_ff_semisupervised = adding_sepsis_classification_per_stay(clean_temporal_df_ff, labels_df)
 clean_temporal_df_ff_unsupervised = clean_temporal_df_ff.copy()
-binned_train_data = data_into_bins(clean_temporal_df_ff_semisupervised, N_BINS=4)
+binned_train_data = data_into_bins(clean_temporal_df_ff_semisupervised, N_BINS=3)
 
 
 # ------------------- STATISTICS --------------------------------------
