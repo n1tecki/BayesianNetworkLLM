@@ -24,14 +24,11 @@ def flatten_df(df, LAB_COLS):
 
 
 
-def dbn_train(flat_df, LAB_COLS):
+def dbn_train(flat_df, LAB_COLS, CORRELATION_THRESHOLD = 0.4, alpha=1e-6):
     # — Select possibel edges —————————————————————————————————
-    CORRELATION_THRESHOLD = 0.4
-    alpha=1e-6
     slice1_cols = [f"{v}_1" for v in ["sepsis"] + LAB_COLS]
-    corr = flat_df[slice1_cols].corr("spearman").abs()
-
-    corr_matrix = flat_df[[f"{col}_1" for col in ["sepsis"] + LAB_COLS]].corr(method="spearman").abs()
+    corr_matrix = flat_df[slice1_cols].corr("spearman").abs()
+    
     whitelist_edges = set()
 
     # sepsis(1) -> every lab(1)
@@ -142,24 +139,4 @@ def dbn_train(flat_df, LAB_COLS):
     inference = DBNInference(model)
     return model, inference
 
-
-
-# — Predict —————————————————————————————————————————————
-def predict_sepsis(patient_df, inference, LAB_COLS):
-    out = {}
-    evidence_so_far = {}
-
-    for t, row in patient_df.reset_index(drop=True).iterrows():
-        # only evidence from *this* slice – no gigantic dict:
-        evidence_slice = {(lab, t): row[lab] for lab in LAB_COLS}
-
-        q = inference.forward_inference(
-            variables=[("sepsis", t)],
-            evidence=evidence_slice
-        )
-        out[t] = q[("sepsis", t)].values[1]
-
-        # If you want to keep a running filter, you can
-        # evidence_so_far.update(evidence_slice)
-    return out
 

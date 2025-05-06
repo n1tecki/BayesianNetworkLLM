@@ -6,7 +6,8 @@ def data_into_bins(df: pd.DataFrame, N_BINS) -> pd.DataFrame:
 
     LAB_COLS = [
         "FiO2", "PaO2", "bilirubin_total", "creatinin",
-        "gcs_eye", "gcs_motor", "gcs_verbal",
+        "cns_score",
+        #"gcs_eye", "gcs_motor", "gcs_verbal",
         "mean_arterial_pressure", "platelet_count",
     ]
     MISSING_BIN = N_BINS

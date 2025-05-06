@@ -139,3 +139,22 @@ def adding_sepsis_classification_per_stay(df, labels_df):
     df_local = df_local.merge(labels_df_local[['hadm_id', 'sepsis']], on='hadm_id', how='left')
     df_local = df_local.set_index(['hadm_id', 'sepsis', 'timestamp'])
     return df_local.sort_index()
+
+
+def cns_transformation(df):
+    df_local = df.copy()
+    def cns_score(row):
+        eye   = row['gcs_eye'] if not np.isnan(row['gcs_eye']) else 4
+        verbal= row['gcs_verbal'] if not np.isnan(row['gcs_verbal']) else 5
+        motor = row['gcs_motor'] if not np.isnan(row['gcs_motor']) else 6
+        total_gcs = eye + verbal + motor
+
+        if pd.isna(total_gcs): return np.nan
+        if total_gcs >= 15:   return 0
+        if total_gcs >= 13:   return 1
+        if total_gcs >= 10:   return 2
+        if total_gcs >= 6:    return 3
+        return 4
+    
+    df_local['cns_score'] = df_local.apply(cns_score, axis=1)
+    
