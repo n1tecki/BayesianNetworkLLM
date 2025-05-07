@@ -148,6 +148,7 @@ def cns_transformation(df):
         verbal= row['gcs_verbal'] if not np.isnan(row['gcs_verbal']) else 5
         motor = row['gcs_motor'] if not np.isnan(row['gcs_motor']) else 6
         total_gcs = eye + verbal + motor
+        return total_gcs
 
         if pd.isna(total_gcs): return np.nan
         if total_gcs >= 15:   return 0
@@ -157,4 +158,5 @@ def cns_transformation(df):
         return 4
     
     df_local['cns_score'] = df_local.apply(cns_score, axis=1)
+    return df_local
     

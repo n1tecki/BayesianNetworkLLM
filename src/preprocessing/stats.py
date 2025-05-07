@@ -89,7 +89,7 @@ def sepsis_nonsepsis_count(df):
     return counts
 
 
-def plot_distribution_with_bell(data, label='empty', binsize=0.5,):
+def plot_distribution_with_bell(data, unit, label='empty', binsize=0.5):
     """
     Plot histogram (density) of data and overlay a full normal bell curve
     extending to mean ± 3 std, even beyond the observed data range.
@@ -136,7 +136,7 @@ def plot_distribution_with_bell(data, label='empty', binsize=0.5,):
     plt.xlim(x_min, x_max)
 
     # 9) Labels
-    plt.xlabel('Value')
+    plt.xlabel(f'Value in {unit}')
     plt.ylabel('Density')
     plt.title(f'Distribution of Laboratory Value {label}')
     plt.tight_layout()
