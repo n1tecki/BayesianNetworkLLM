@@ -70,41 +70,35 @@ def clean_bloodgas(
     fio2_col: str = 'FiO2',
     pao2_col: str = 'PaO2',
     max_fio2_percent: float = 100.0,
+    min_fio2_percent: float = 15.0,
     min_pao2: float = 1.0,
     max_pao2: float = 500.0
 ) -> pd.DataFrame:
     df_local = df.copy()
 
     # --- Clean FiO2 ---
-    # coerce to numeric, zeros → NaN
-    fio2 = pd.to_numeric(df_local[fio2_col], errors='coerce').replace(0, np.nan)
+    fio2_raw = pd.to_numeric(df_local[fio2_col], errors='coerce')
 
-    # fraction → percent, percent stays
-    fio2_clean = np.where(
-        fio2 <= 1.0,
-        fio2 * 100,
-        fio2
-    )
-    # clip impossible highs
-    fio2_clean = np.where(
-        fio2_clean > max_fio2_percent,
-        np.nan,
-        fio2_clean
-    )
-    df_local[fio2_col] = fio2_clean
+    # Replace 0 and negative values with NaN
+    fio2 = fio2_raw.mask(fio2_raw <= 0)
+
+    # Convert fractions to percentages ONLY if <= 1.0 and > 0.1 (to avoid noise like 0.01 or 0.001)
+    converted_fraction = fio2.between(0.1, 1.0)
+    fio2.loc[converted_fraction] = fio2[converted_fraction] * 100
+
+    # Remove values that are implausible: < min_fio2_percent or > max_fio2_percent
+    fio2 = fio2.where((fio2 >= min_fio2_percent) & (fio2 <= max_fio2_percent))
+
+    df_local[fio2_col] = fio2
 
     # --- Clean PaO2 ---
-    # coerce to numeric, zeros → NaN
     pao2 = pd.to_numeric(df_local[pao2_col], errors='coerce').replace(0, np.nan)
+    pao2 = pao2.where((pao2 >= min_pao2) & (pao2 <= max_pao2))
 
-    # mask out-of-range values
-    pao2_clean = pao2.where(
-        (pao2 >= min_pao2) & (pao2 <= max_pao2),
-        np.nan
-    )
-    df_local[pao2_col] = pao2_clean
+    df_local[pao2_col] = pao2
 
     return df_local
+
 
 
 # Map gcs_motor string to numeric
@@ -130,7 +124,7 @@ def clean_min_max(df, column, min_val, max_val, replace=False):
 
     if replace:
         cleaned = orig.copy()
-        cleaned = cleaned.mask(cleaned < 0,    other=np.nan)
+        cleaned = cleaned.mask(cleaned < 0, other=np.nan)
         cleaned = cleaned.mask(cleaned < min_val, other=min_val)
         cleaned = cleaned.mask(cleaned > max_val, other=max_val)
     else:
