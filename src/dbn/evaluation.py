@@ -63,15 +63,15 @@ def compare_single_threshold(runs, dbn_thr=0.7, sofa_thr=2):
     earlier = later = equal = 0
     deltas = []
 
-    for y_hat, y in runs:
-        s_hat = steps_to_threshold(y_hat, dbn_thr)
-        s_y   = steps_to_threshold(y,    sofa_thr)
+    for y_dbn, y_sofa in runs:
+        y_dbn = steps_to_threshold(y_dbn, dbn_thr)
+        y_sofa = steps_to_threshold(y_sofa, sofa_thr)
 
         # ignore runs in which either series never hits its threshold
-        if s_hat is None or s_y is None:
+        if y_dbn is None or y_sofa is None:
             continue
 
-        delta = s_hat - s_y
+        delta = y_dbn - y_sofa
         deltas.append(delta)
 
         if delta < 0:
