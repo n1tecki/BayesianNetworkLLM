@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import KBinsDiscretizer
+
 
 # Transforms the raw SQL df data into a temporal dataframe
 def df_to_temporal(df):
@@ -151,3 +153,72 @@ def forward_fill(df):
 # Adding the SOFA classifiactions to the raw value table
 def adding_sofa_classification(df1, df2):
     return df1.join(df2['sepsis'], how='left')
+
+
+def data_into_bins(df: pd.DataFrame, N_BINS) -> pd.DataFrame:
+
+    LAB_COLS = [
+        #"FiO2", "PaO2", 
+        'pf_ratio',
+        "bilirubin_total", "creatinin",
+        "cns_score",
+        #"gcs_eye", "gcs_motor", "gcs_verbal",
+        "mean_arterial_pressure", "platelet_count",
+    ]
+    MISSING_BIN = N_BINS
+    df_local = df.copy().reset_index()
+
+
+    def qbin(col: str) -> None:
+        ok = df_local[col].notna()
+        kb = KBinsDiscretizer(N_BINS, encode="ordinal", strategy="quantile")
+        df_local.loc[ok, col] = kb.fit_transform(df_local.loc[ok, [col]]).astype(int)
+        df_local.loc[~ok, col] = MISSING_BIN
+        df_local[col] = df_local[col].astype(int)
+
+    for lab in LAB_COLS:
+        qbin(lab)
+
+    df_local["sepsis"] = df_local["sepsis"].astype(int)
+    df_local['timestamp'] = pd.to_datetime(df_local['timestamp'])
+    df_local = df_local.set_index("hadm_id").sort_values("timestamp")
+
+    return df_local
+
+
+def cns_transformation(df):
+    df_local = df.copy()
+    def cns_score(row):
+        eye = row['gcs_eye'] if not np.isnan(row['gcs_eye']) else 4
+        verbal = row['gcs_verbal'] if not np.isnan(row['gcs_verbal']) else 5
+        motor = row['gcs_motor'] if not np.isnan(row['gcs_motor']) else 6
+        total_gcs = eye + verbal + motor
+        return total_gcs
+
+        if pd.isna(total_gcs): return np.nan
+        if total_gcs >= 15:   return 0
+        if total_gcs >= 13:   return 1
+        if total_gcs >= 10:   return 2
+        if total_gcs >= 6:    return 3
+        return 4
+    
+    df_local['cns_score'] = df_local.apply(cns_score, axis=1)
+    return df_local
+
+
+def compute_pf_ratio(df: pd.DataFrame) -> pd.DataFrame:
+    df_local = df.copy()
+
+    # 1) numeric coercion + fill FiO₂→21%
+    df_local['FiO2'] = (
+        pd.to_numeric(df_local.get('FiO2'), errors='coerce')
+          .fillna(21.0)
+    )
+
+    # 2) numeric coercion for PaO₂ (no fill—let NaN propagate)
+    df_local['PaO2'] = pd.to_numeric(df_local.get('PaO2'), errors='coerce')
+
+    # 3) PF ratio
+    df_local['pf_ratio'] = df_local['PaO2'] / (df_local['FiO2'] / 100)
+
+    return df_local

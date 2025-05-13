@@ -11,37 +11,6 @@ from statsmodels.stats.contingency_tables import mcnemar
 import pandas as pd
 
 
-def predict_sepsis(patient_df, inference, LAB_COLS):
-    out = {}
-
-    for t, row in patient_df.reset_index(drop=True).iterrows():
-        # only evidence from *this* slice – no gigantic dict:
-        evidence_slice = {(lab, t): row[lab] for lab in LAB_COLS}
-
-        q = inference.forward_inference(
-            variables=[("sepsis", t)],
-            evidence=evidence_slice
-        )
-        out[t] = q[("sepsis", t)].values[1]
-
-        # If you want to keep a running filter, you can
-        # evidence_so_far.update(evidence_slice)
-    return out
-
-
-def predict_df_data(df, inference, LAB_COLS, save_path="data/predictions.json"):
-    predictions = {}
-    test_ids = df.index.unique()
-    for hadm_id in tqdm(test_ids):
-        new_patient = df.loc[hadm_id].reset_index(drop=True)[LAB_COLS]
-        pred = predict_sepsis(new_patient, inference, LAB_COLS)
-        predictions[hadm_id] = pred
-
-    with open(save_path, "w") as f:
-        json.dump(predictions, f, indent=2)
-
-    return predictions
-
 
 def steps_to_threshold(sequence, threshold):
     """

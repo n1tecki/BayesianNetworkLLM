@@ -1,8 +1,7 @@
 import pandas as pd
-from src.preprocessing.sofa_classification import compute_sofa_scores, classify_sofa_stays, sofa_classification, adding_sepsis_classification_per_stay, cns_transformation
-from src.preprocessing.preprocessing import clean_bloodgas, gcs_motor_to_numeric, df_to_temporal, forward_fill, adding_sofa_classification, clean_min_max
-from src.preprocessing.stats import lab_value_counts, count_leading_zeros_before_sepsis, sepsis_duration_count, sepsis_nonsepsis_count, plot_distribution_with_bell
-from src.preprocessing.data_binning import data_into_bins
+from src.preprocessing_utils.sofa_classification import compute_sofa_scores, classify_sofa_stays, sofa_classification, adding_sepsis_classification_per_stay
+from src.preprocessing_utils.preprocessing import clean_bloodgas, gcs_motor_to_numeric, df_to_temporal, forward_fill, adding_sofa_classification, clean_min_max, data_into_bins, cns_transformation, compute_pf_ratio
+from src.preprocessing_utils.stats import lab_value_counts, count_leading_zeros_before_sepsis, sepsis_duration_count, sepsis_nonsepsis_count, plot_distribution_with_bell
 
 
 # For the paper here clean the extreme values of each lab value. Report how many got caught and replaced.
@@ -14,13 +13,13 @@ from src.preprocessing.data_binning import data_into_bins
 
 
 # Load the data and transform it into a temporal dataframe to CSV file
-df = pd.read_csv('data/_lab_chart_sofa_events.csv')
+df = pd.read_csv('data/sql_filtering/_lab_chart_sofa_events.csv')
 labels_df = df[['hadm_id', 'sepsis']].reset_index()
+
 
 
 # ------------------- DATA PREPROCESSING ------------------------------
 temporal_df = df_to_temporal(df)
-raw_lab_count_stats = lab_value_counts(temporal_df)
 temporal_df_clean = clean_bloodgas(temporal_df, fio2_col='FiO2', pao2_col='PaO2')
 temporal_df_clean = gcs_motor_to_numeric(temporal_df_clean)
 temporal_df_clean = clean_min_max(temporal_df_clean, column='bilirubin_total', min_val=.1, max_val=50, replace=False)
@@ -28,30 +27,30 @@ temporal_df_clean = clean_min_max(temporal_df_clean, column='creatinin', min_val
 temporal_df_clean = clean_min_max(temporal_df_clean, column='mean_arterial_pressure', min_val=30, max_val=200, replace=False)
 temporal_df_clean = clean_min_max(temporal_df_clean, column='platelet_count', min_val=10, max_val=1000, replace=False)
 temporal_df_clean = cns_transformation(temporal_df_clean)
+temporal_df_clean = compute_pf_ratio(temporal_df_clean)
 clean_temporal_df_ff = forward_fill(temporal_df_clean)
-
-
-# ------------------- SOFA SORTING ------------------------------------
-sofa_df = compute_sofa_scores(clean_temporal_df_ff)
-sofa_df_sofa_classification = sofa_classification(sofa_df)
-sofa_df_diagnoses_classified = classify_sofa_stays(sofa_df_sofa_classification, labels_df)
-clean_temporal_df_ff_supervised = adding_sofa_classification(clean_temporal_df_ff, sofa_df_diagnoses_classified)
 clean_temporal_df_ff_semisupervised = adding_sepsis_classification_per_stay(clean_temporal_df_ff, labels_df)
-clean_temporal_df_ff_unsupervised = clean_temporal_df_ff.copy()
 binned_train_data = data_into_bins(clean_temporal_df_ff_semisupervised, N_BINS=3)
 
 
+
+# ------------------- SOFA DATA PROCESSING ------------------------------------
+sofa_df = compute_sofa_scores(clean_temporal_df_ff)
+sofa_df_sofa_classification = sofa_classification(sofa_df)
+sofa_df_diagnoses_classified = classify_sofa_stays(sofa_df_sofa_classification, labels_df)
+
+
+
 # ------------------- STATISTICS --------------------------------------
+raw_lab_count_stats = lab_value_counts(temporal_df)
 lab_count_stats = lab_value_counts(temporal_df_clean)
 stay_timesteps_stats = sepsis_duration_count(sofa_df_diagnoses_classified)
 sepsis_by_diagnoses = sepsis_nonsepsis_count(sofa_df_diagnoses_classified)
 sepsis_by_sofa = sepsis_nonsepsis_count(sofa_df_diagnoses_classified)
 duration_before_sofa = count_leading_zeros_before_sepsis(sofa_df_diagnoses_classified)
 
-
-# Graphs and stats ----------------------------------------------------
 first_hadm = sofa_df_diagnoses_classified.index.unique(level=0)[1]
-print(clean_temporal_df_ff_supervised.loc[first_hadm])
+print(clean_temporal_df_ff_semisupervised.loc[first_hadm])
 print(sofa_df_diagnoses_classified.loc[first_hadm])
 
 # plot_distribution_with_bell(raw_lab_count_stats['platelet_count'])
@@ -64,9 +63,9 @@ print(sofa_df_diagnoses_classified.loc[first_hadm])
 # plot_distribution_with_bell(raw_lab_count_stats['PaO2'])
 # plot_distribution_with_bell(raw_lab_count_stats['FiO2'])
 
-
+# plot_distribution_with_bell(lab_count_stats['pf_ratio'], unit="mmHg", label=r"$\mathrm{PaO_2}$/$\mathrm{FiO_2}$", binsize=.25)
 # plot_distribution_with_bell(lab_count_stats['platelet_count'], unit=r"($\times 10^9$/L)", label="Platelet Count", binsize=.25)
-# plot_distribution_with_bell(lab_count_stats['mean_arterial_pressure'], unit="mmhg", label="Mean Arterial Pressure ", binsize=.25)
+# plot_distribution_with_bell(lab_count_stats['mean_arterial_pressure'], unit="mmHg", label="Mean Arterial Pressure ", binsize=.25)
 # plot_distribution_with_bell(lab_count_stats['creatinin'], unit="mg/dL", label="Creatinin", binsize=.25)
 # plot_distribution_with_bell(lab_count_stats['bilirubin_total'], unit="mg/dL", label="Total Bilirubin", binsize=.25)
 # plot_distribution_with_bell(lab_count_stats['gcs_verbal'], unit=r"", label="CNS Verbal Score", binsize=1)
@@ -77,8 +76,15 @@ print(sofa_df_diagnoses_classified.loc[first_hadm])
 # plot_distribution_with_bell(lab_count_stats['cns_score'], unit=r"", label="Central nervous system Score", binsize=1)
 
 
-clean_temporal_df_ff_unsupervised.to_parquet('data/unsupervised_df_classified.parquet', engine='pyarrow')
-clean_temporal_df_ff_semisupervised.to_parquet('data/semisupervised_df_classified.parquet', engine='pyarrow')
-clean_temporal_df_ff_supervised.to_parquet('data/supervisedraw_df_classified.parquet', engine='pyarrow')
-sofa_df_diagnoses_classified.to_parquet('data/sofa_df_classified.parquet', engine='pyarrow')
-binned_train_data.to_parquet('data/binned_train_data.parquet', engine='pyarrow')
+
+# -------- UPERVISED/UNSUPERVISED DATA SET CREATION ----------------------
+# clean_temporal_df_ff_supervised = adding_sofa_classification(clean_temporal_df_ff, sofa_df_diagnoses_classified)
+# clean_temporal_df_ff_unsupervised = clean_temporal_df_ff.copy()
+# clean_temporal_df_ff_unsupervised.to_parquet('data/unsupervised_df_classified.parquet', engine='pyarrow')
+# clean_temporal_df_ff_supervised.to_parquet('data/supervisedraw_df_classified.parquet', engine='pyarrow')
+
+
+# ------------------- SAVE DATA --------------------------------------
+clean_temporal_df_ff_semisupervised.to_parquet('data/preprocessing/semisupervised_df_classified.parquet', engine='pyarrow')
+sofa_df_diagnoses_classified.to_parquet('data/preprocessing/sofa_df_classified.parquet', engine='pyarrow')
+binned_train_data.to_parquet('data/preprocessing/binned_train_data.parquet', engine='pyarrow')

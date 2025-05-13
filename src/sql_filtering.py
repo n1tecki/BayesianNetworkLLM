@@ -1,5 +1,5 @@
-from src.sql_creation.sql_script_exec import execute_sql_files
-from sql_creation.utils import export_table_to_csv
+from src.sql_utils.sql_script_exec import execute_sql_files
+from src.sql_utils.utils import export_table_to_csv
 
 
 # ------------------ SQL TABLE CREARION ------------------------------
