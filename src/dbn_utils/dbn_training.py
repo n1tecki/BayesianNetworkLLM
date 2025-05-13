@@ -5,6 +5,7 @@ from pgmpy.models import DynamicBayesianNetwork as DBN
 from pgmpy.inference import DBNInference
 from pgmpy.factors.discrete import TabularCPD
 import numpy as np
+from tqdm import tqdm
 
 
 def flatten_df(df, LAB_COLS):
@@ -140,3 +141,30 @@ def dbn_train(flat_df, LAB_COLS, CORRELATION_THRESHOLD = 0.4, alpha=1e-6):
     return model, inference
 
 
+def predict_sepsis(patient_df, inference, LAB_COLS):
+    out = {}
+
+    for t, row in patient_df.reset_index(drop=True).iterrows():
+        # only evidence from *this* slice – no gigantic dict:
+        evidence_slice = {(lab, t): row[lab] for lab in LAB_COLS}
+
+        q = inference.forward_inference(
+            variables=[("sepsis", t)],
+            evidence=evidence_slice
+        )
+        out[t] = q[("sepsis", t)].values[1]
+
+        # If you want to keep a running filter, you can
+        # evidence_so_far.update(evidence_slice)
+    return out
+
+
+def dbn_predict(df, inference, LAB_COLS):
+    predictions = {}
+    test_ids = df.index.unique()
+    for hadm_id in tqdm(test_ids):
+        new_patient = df.loc[hadm_id].reset_index(drop=True)[LAB_COLS]
+        pred = predict_sepsis(new_patient, inference, LAB_COLS)
+        predictions[hadm_id] = pred
+
+    return predictions
