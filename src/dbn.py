@@ -4,17 +4,14 @@ from src.dbn_utils.utils import create_train_test_set
 import matplotlib.pyplot as plt
 import pandas as pd
 import json
+import pickle
 
 
 # ---------- LOAD DATA ----------------------------------------
 # Read in data
 LAB_COLS = [
-        #"FiO2", "PaO2", 
-        'pf_ratio',
-        "bilirubin_total", "creatinin",
-        "cns_score",
-        #"gcs_eye", "gcs_motor", "gcs_verbal",
-        "mean_arterial_pressure", "platelet_count",
+        "pf_ratio", "bilirubin_total", "creatinin",
+        "cns_score", "mean_arterial_pressure", "platelet_count",
     ]
 df = pd.read_parquet("data/preprocessing/binned_train_data.parquet")
 df_train, df_test = create_train_test_set(df=df, 
@@ -42,6 +39,12 @@ network_visualisation(
     notebook=False,
     physics="barnes_hut"
 )
+
+with open('data/dbn/model.pkl', 'wb') as f_model:
+    pickle.dump(model, f_model)
+
+with open('data/dbn/inference.pkl', 'wb') as f_inf:
+    pickle.dump(inference, f_inf)
 
 
 

@@ -163,7 +163,7 @@ def dbn_predict(df, inference, LAB_COLS):
     predictions = {}
     test_ids = df.index.unique()
     for hadm_id in tqdm(test_ids):
-        new_patient = df.loc[hadm_id].reset_index(drop=True)[LAB_COLS]
+        new_patient = df.loc[[hadm_id], LAB_COLS].reset_index(drop=True)
         pred = predict_sepsis(new_patient, inference, LAB_COLS)
         predictions[hadm_id] = pred
 

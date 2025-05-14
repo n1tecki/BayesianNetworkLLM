@@ -1,6 +1,6 @@
 import pandas as pd
 from src.preprocessing_utils.sofa_classification import compute_sofa_scores, classify_sofa_stays, sofa_classification, adding_sepsis_classification_per_stay
-from src.preprocessing_utils.preprocessing import clean_bloodgas, gcs_motor_to_numeric, df_to_temporal, forward_fill, adding_sofa_classification, clean_min_max, data_into_bins, cns_transformation, compute_pf_ratio
+from preprocessing_utils.preprocessing_tools import clean_bloodgas, gcs_verbal_to_numeric, df_to_temporal, forward_fill, adding_sofa_classification, clean_min_max, quantile_bins, cns_transformation, compute_pf_ratio, log_uniform_bins
 from src.preprocessing_utils.stats import lab_value_counts, count_leading_zeros_before_sepsis, sepsis_duration_count, sepsis_nonsepsis_count, plot_distribution_with_bell
 
 
@@ -21,7 +21,7 @@ labels_df = df[['hadm_id', 'sepsis']].reset_index()
 # ------------------- DATA PREPROCESSING ------------------------------
 temporal_df = df_to_temporal(df)
 temporal_df_clean = clean_bloodgas(temporal_df, fio2_col='FiO2', pao2_col='PaO2')
-temporal_df_clean = gcs_motor_to_numeric(temporal_df_clean)
+temporal_df_clean = gcs_verbal_to_numeric(temporal_df_clean)
 temporal_df_clean = clean_min_max(temporal_df_clean, column='bilirubin_total', min_val=.1, max_val=50, replace=False)
 temporal_df_clean = clean_min_max(temporal_df_clean, column='creatinin', min_val=.2, max_val=20, replace=False)
 temporal_df_clean = clean_min_max(temporal_df_clean, column='mean_arterial_pressure', min_val=30, max_val=200, replace=False)
@@ -30,7 +30,14 @@ temporal_df_clean = cns_transformation(temporal_df_clean)
 temporal_df_clean = compute_pf_ratio(temporal_df_clean)
 clean_temporal_df_ff = forward_fill(temporal_df_clean)
 clean_temporal_df_ff_semisupervised = adding_sepsis_classification_per_stay(clean_temporal_df_ff, labels_df)
-binned_train_data = data_into_bins(clean_temporal_df_ff_semisupervised, N_BINS=3)
+binned_train_data = quantile_bins(clean_temporal_df_ff_semisupervised, 
+    LAB_COLS = [
+        "pf_ratio", "bilirubin_total", "creatinin", 
+        "mean_arterial_pressure", "platelet_count",
+    ],
+    N_BINS=3
+)
+binned_train_data = log_uniform_bins(binned_train_data, LAB_COLS=["cns_score"], N_BINS=3)
 
 
 
