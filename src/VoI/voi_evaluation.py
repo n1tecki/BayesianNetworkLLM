@@ -1,29 +1,86 @@
-from src.VoI.voi_tools import simulate_voi_path
-import pandas as pd
+"""
+Experiment runner: compare VoI timeline vs. factual timeline
+Author: 2025-05-14
+"""
+
+from __future__ import annotations
+from typing import List
+
 import numpy as np
+import pandas as pd
+from pgmpy.inference import DBNInference
+
+from src.VoI.voi_tools import simulate_voi_path
+from tqdm import tqdm
 
 
-def patient_lead_time(tl, real_tl, conf_threshold=0.7):
-    """Difference (real - voi) in first time reaching threshold."""
-    def first_cross(timeline):
-        for step in timeline:
-            if step['p_sepsis'] >= conf_threshold:
-                return step['t']
-        return np.inf
-    return first_cross(real_tl) - first_cross(tl)
+# ------------------------------------------------------------------ #
+# 1.  Helper – lead time
+# ------------------------------------------------------------------ #
+def _first_cross(tl, thr):
+    for step in tl:
+        if step['p_sepsis'] >= thr:
+            return step['t']
+    return np.inf
 
-def run_experiment(df_test, inference, lab_cols,
-                   conf_threshold=0.7):
-    results = []
-    for hadm_id, pat_df in df_test.groupby(level=0):
-        pat_df = pat_df.droplevel(0)               # timestamp index only
-        voi_tl  = simulate_voi_path(pat_df, inference, lab_cols,
-                                    conf_threshold)
-        real_tl = simulate_voi_path(pat_df, inference, lab_cols,      # same function
-                                    conf_threshold=conf_threshold)    # but *no* extra labs
-        lead = patient_lead_time(voi_tl, real_tl, conf_threshold)
-        results.append({'hadm_id': hadm_id,
-                        'voi_steps': len(voi_tl),
-                        'real_steps': len(real_tl),
-                        'lead_time': lead})
-    return pd.DataFrame(results)
+
+def patient_lead_time(voi_tl, real_tl, thr=0.7):
+    """Positive ⇒ VoI detects earlier."""
+    return _first_cross(real_tl, thr) - _first_cross(voi_tl, thr)
+
+
+# ------------------------------------------------------------------ #
+# 2.  Robust patient grouping (index or column)
+# ------------------------------------------------------------------ #
+def _patient_groups(df: pd.DataFrame):
+    if 'hadm_id' in df.columns:
+        yield from df.groupby('hadm_id', sort=False)
+    else:
+        yield from df.groupby(level=0, sort=False)
+
+
+# ------------------------------------------------------------------ #
+# 3.  Main experiment
+# ------------------------------------------------------------------ #
+def run_experiment(df_test: pd.DataFrame,
+                   inference: DBNInference,
+                   lab_cols: List[str],
+                   *,
+                   conf_threshold: float = 0.7,
+                   missing_bin: int | None = None) -> pd.DataFrame:
+    """
+    Return a tidy DataFrame with columns:
+      hadm_id | voi_steps | real_steps | lead_time
+    """
+    rows = []
+    for hadm_id, pat_df in tqdm(_patient_groups(df_test), total=len(df_test), desc="Processing of all stays"):
+        # ensure chronological order; drop hadm_id level if present
+        pat_df = pat_df.sort_values('timestamp')
+        if isinstance(pat_df.index, pd.MultiIndex):
+            pat_df = pat_df.reset_index(level=0, drop=True)
+        else:
+            pat_df = pat_df.reset_index(drop=True)
+
+        voi_tl = simulate_voi_path(
+            pat_df, inference, lab_cols, hadm_id,
+            conf_threshold=conf_threshold,
+            missing_bin=missing_bin,
+            allow_voi=True
+        )
+        real_tl = simulate_voi_path(
+            pat_df, inference, lab_cols, hadm_id,
+            conf_threshold=conf_threshold,
+            missing_bin=missing_bin,
+            allow_voi=False
+        )
+
+        rows.append({
+            'hadm_id': hadm_id,
+            'voi_steps': len(voi_tl),
+            'voi_timeline': voi_tl,
+            'real_steps': len(real_tl),
+            'real_timeline': real_tl,
+            'lead_time': patient_lead_time(voi_tl, real_tl, conf_threshold)
+        })
+
+    return pd.DataFrame(rows)

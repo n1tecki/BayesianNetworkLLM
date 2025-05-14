@@ -1,23 +1,23 @@
 from src.VoI.voi_evaluation import run_experiment
-import pickle
-import pandas as pd
-
-
+import pickle, pandas as pd
 
 LAB_COLS = [
-        "pf_ratio", "bilirubin_total", "creatinin",
-        "cns_score", "mean_arterial_pressure", "platelet_count",
-    ]
+    "pf_ratio", "bilirubin_total", "creatinin",
+    "cns_score", "mean_arterial_pressure", "platelet_count",
+]
+MISSING_BIN = 3
 
-with open('data/dbn/inference.pkl', 'rb') as f_inf:
-    inference = pickle.load(f_inf)
+with open("data/dbn/inference.pkl", "rb") as f:
+    inference = pickle.load(f)
 
 df_test = pd.read_parquet("data/dbn/df_test.parquet")
-test_ids = df_test.index.unique()
 
+summary = run_experiment(
+    df_test,
+    inference,
+    LAB_COLS,
+    conf_threshold=0.7,
+    missing_bin=MISSING_BIN
+)
 
-
-summary = run_experiment(df_test, inference, LAB_COLS, conf_threshold=0.7)
-
-print("average lead-time (positive --> earlier detection):",
-      summary['lead_time'].mean())
+print("Average lead-time (+ ⇒ earlier):", summary["lead_time"].mean())
