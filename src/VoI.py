@@ -1,5 +1,6 @@
 from src.VoI.voi_evaluation import run_experiment
 import pickle, pandas as pd
+import json
 
 LAB_COLS = [
     "pf_ratio", "bilirubin_total", "creatinin",
@@ -19,5 +20,8 @@ summary = run_experiment(
     conf_threshold=0.7,
     missing_bin=MISSING_BIN
 )
+
+with open("data/VoI/voi_timelines.json", "w", encoding="utf-8") as f:
+    json.dump(summary, f, ensure_ascii=False, indent=2)
 
 print("Average lead-time (+ ⇒ earlier):", summary["lead_time"].mean())
