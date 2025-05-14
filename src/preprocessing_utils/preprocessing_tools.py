@@ -104,7 +104,7 @@ def clean_bloodgas(
 
 
 # Map gcs_motor string to numeric
-def gcs_motor_to_numeric(df):
+def gcs_verbal_to_numeric(df):
     df_local = df.copy()
 
     verbal_map = {
@@ -115,7 +115,7 @@ def gcs_motor_to_numeric(df):
         'Mute': 1,
         'Intubated/trached': 1
     }
-    df_local['gcs_motor'] = df_local['gcs_motor'].replace(verbal_map)
+    df_local['gcs_verbal'] = df_local['gcs_verbal'].replace(verbal_map)
     return df_local
 
 
@@ -155,16 +155,8 @@ def adding_sofa_classification(df1, df2):
     return df1.join(df2['sepsis'], how='left')
 
 
-def data_into_bins(df: pd.DataFrame, N_BINS) -> pd.DataFrame:
+def quantile_bins(df: pd.DataFrame, LAB_COLS, N_BINS) -> pd.DataFrame:
 
-    LAB_COLS = [
-        #"FiO2", "PaO2", 
-        'pf_ratio',
-        "bilirubin_total", "creatinin",
-        "cns_score",
-        #"gcs_eye", "gcs_motor", "gcs_verbal",
-        "mean_arterial_pressure", "platelet_count",
-    ]
     MISSING_BIN = N_BINS
     df_local = df.copy().reset_index()
 
@@ -184,6 +176,38 @@ def data_into_bins(df: pd.DataFrame, N_BINS) -> pd.DataFrame:
     df_local = df_local.set_index("hadm_id").sort_values("timestamp")
 
     return df_local
+
+
+def log_uniform_bins(df: pd.DataFrame, LAB_COLS, N_BINS) -> pd.DataFrame:
+
+    MISSING_BIN = N_BINS
+    df_local = df.copy().reset_index()
+
+    def ulog_bin(col: str) -> None:
+        ok = df_local[col].notna()
+        if ok.any():
+            x = df_local.loc[ok, col]
+            x = np.log1p(x - x.min())
+            kb = KBinsDiscretizer(
+                N_BINS, encode="ordinal", strategy="uniform"
+            )
+            df_local.loc[ok, col] = kb.fit_transform(
+                x.to_frame()
+            ).astype(int)
+        df_local.loc[~ok, col] = MISSING_BIN
+        df_local[col] = df_local[col].astype(int)
+
+    for lab in LAB_COLS:
+        ulog_bin(lab)
+
+    df_local["sepsis"] = df_local["sepsis"].astype(int)
+    df_local["timestamp"] = pd.to_datetime(df_local["timestamp"])
+    return (
+        df_local
+        .set_index("hadm_id")
+        .sort_values("timestamp")
+    )
+
 
 
 def cns_transformation(df):
