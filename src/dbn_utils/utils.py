@@ -35,9 +35,12 @@ def create_train_test_set(
     df_copy.index.name = 'hadm_id'
 
     # Reading as int8 to reduce memory usage
-    cat_cols = ['sepsis'] + cols
-    for c in cat_cols:
-        df_copy[c] = pd.Categorical(df_copy[c]).codes.astype('int8')
+    #df_copy = df_copy.reset_index(level='sepsis')
+    df_copy['sepsis'] = pd.Categorical(df_copy['sepsis'], categories=[0, 1], ordered=False)
+    for c in cols:
+        #df_copy[c] = pd.Categorical(df_copy[c]).codes.astype('int8')
+        uniques = sorted(df_copy[c].dropna().unique())
+        df_copy[c] = pd.Categorical(df_copy[c], categories=uniques, ordered=False)
 
     # Split into training and test data
     df_train, df_test = split_train_test(df_copy, 
