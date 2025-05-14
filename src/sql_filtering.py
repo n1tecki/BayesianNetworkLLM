@@ -14,5 +14,5 @@ execute_sql_files("sqlite_db/mimic4.db", sql_scripts)
 
 db_path = "sqlite_db/mimic4.db"
 table_name = "_lab_chart_sofa_events"
-output_csv = "data/_lab_chart_sofa_events.csv"
+output_csv = "data/sql_filtering/_lab_chart_sofa_events.csv"
 export_table_to_csv(db_path, table_name, output_csv)
