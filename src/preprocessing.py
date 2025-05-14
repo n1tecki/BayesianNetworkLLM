@@ -15,6 +15,7 @@ from src.preprocessing_utils.stats import lab_value_counts, count_leading_zeros_
 # Load the data and transform it into a temporal dataframe to CSV file
 df = pd.read_csv('data/sql_filtering/_lab_chart_sofa_events.csv')
 labels_df = df[['hadm_id', 'sepsis']].reset_index()
+N_BINS = 3
 
 
 
@@ -35,9 +36,9 @@ binned_train_data = quantile_bins(clean_temporal_df_ff_semisupervised,
         "pf_ratio", "bilirubin_total", "creatinin", 
         "mean_arterial_pressure", "platelet_count",
     ],
-    N_BINS=3
+    N_BINS=N_BINS
 )
-binned_train_data = log_uniform_bins(binned_train_data, LAB_COLS=["cns_score"], N_BINS=3)
+binned_train_data = log_uniform_bins(binned_train_data, LAB_COLS=["cns_score"], N_BINS=N_BINS)
 
 
 

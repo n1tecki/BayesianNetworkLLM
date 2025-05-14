@@ -156,15 +156,16 @@ def adding_sofa_classification(df1, df2):
 
 
 def quantile_bins(df: pd.DataFrame, LAB_COLS, N_BINS) -> pd.DataFrame:
-
-    MISSING_BIN = N_BINS
+    MISSING_BIN = 0
     df_local = df.copy().reset_index()
-
 
     def qbin(col: str) -> None:
         ok = df_local[col].notna()
-        kb = KBinsDiscretizer(N_BINS, encode="ordinal", strategy="quantile")
-        df_local.loc[ok, col] = kb.fit_transform(df_local.loc[ok, [col]]).astype(int)
+        kb = KBinsDiscretizer(n_bins=N_BINS,
+                              encode="ordinal",
+                              strategy="quantile")
+        bins = kb.fit_transform(df_local.loc[ok, [col]]).astype(int).ravel()
+        df_local.loc[ok, col] = bins + 1
         df_local.loc[~ok, col] = MISSING_BIN
         df_local[col] = df_local[col].astype(int)
 
@@ -172,28 +173,36 @@ def quantile_bins(df: pd.DataFrame, LAB_COLS, N_BINS) -> pd.DataFrame:
         qbin(lab)
 
     df_local["sepsis"] = df_local["sepsis"].astype(int)
-    df_local['timestamp'] = pd.to_datetime(df_local['timestamp'])
-    df_local = df_local.set_index("hadm_id").sort_values("timestamp")
+    df_local["timestamp"] = pd.to_datetime(df_local["timestamp"])
+    df_local = (
+        df_local
+        .set_index("hadm_id")
+        .sort_values("timestamp")
+    )
 
     return df_local
 
 
 def log_uniform_bins(df: pd.DataFrame, LAB_COLS, N_BINS) -> pd.DataFrame:
-
-    MISSING_BIN = N_BINS
+    MISSING_BIN = 0
     df_local = df.copy().reset_index()
 
     def ulog_bin(col: str) -> None:
         ok = df_local[col].notna()
         if ok.any():
+            # shift so min maps to 0, then log1p
             x = df_local.loc[ok, col]
             x = np.log1p(x - x.min())
             kb = KBinsDiscretizer(
-                N_BINS, encode="ordinal", strategy="uniform"
+                n_bins=N_BINS,
+                encode="ordinal",
+                strategy="uniform"
             )
-            df_local.loc[ok, col] = kb.fit_transform(
-                x.to_frame()
-            ).astype(int)
+            # fit/transform → 0..N_BINS-1, then shift to 1..N_BINS
+            bins = kb.fit_transform(x.to_frame()).astype(int).ravel()
+            df_local.loc[ok, col] = bins + 1
+
+        # missing → 0
         df_local.loc[~ok, col] = MISSING_BIN
         df_local[col] = df_local[col].astype(int)
 
