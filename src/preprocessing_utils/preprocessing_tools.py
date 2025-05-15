@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import KBinsDiscretizer
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import IterativeImputer
 
 
 # Transforms the raw SQL df data into a temporal dataframe
@@ -219,21 +221,48 @@ def log_uniform_bins(df: pd.DataFrame, LAB_COLS, N_BINS) -> pd.DataFrame:
 
 
 
-def cns_transformation(df):
-    df_local = df.copy()
-    def cns_score(row):
-        eye = row['gcs_eye'] if not np.isnan(row['gcs_eye']) else 4
-        verbal = row['gcs_verbal'] if not np.isnan(row['gcs_verbal']) else 5
-        motor = row['gcs_motor'] if not np.isnan(row['gcs_motor']) else 6
-        total_gcs = eye + verbal + motor
-        return total_gcs
+def compute_gcs_mice(df, random_state=42):
+    df = df.copy()
 
-        if pd.isna(total_gcs): return np.nan
-        if total_gcs >= 15:   return 0
-        if total_gcs >= 13:   return 1
-        if total_gcs >= 10:   return 2
-        if total_gcs >= 6:    return 3
-        return 4
+    imputer = IterativeImputer(random_state=random_state,
+                               sample_posterior=True)
+    # only these three columns go into the imputer
+    sub = df[['gcs_eye', 'gcs_verbal', 'gcs_motor']]
+    imputed_array = imputer.fit_transform(sub)
+    # temporary DataFrame of floats
+    imputed_df = pd.DataFrame(imputed_array,
+                              columns=sub.columns,
+                              index=df.index)
+    # valid ranges for each component
+    valid_ranges = {
+        'gcs_eye':    (1, 4),
+        'gcs_verbal': (1, 5),
+        'gcs_motor':  (1, 6),
+    }
+    # replace only NaNs, with rounded+clipped values
+    for col, (lo, hi) in valid_ranges.items():
+        rounded = imputed_df[col].round().clip(lower=lo, upper=hi).astype(int)
+        df[col] = df[col].where(df[col].notna(), rounded)
+    # recompute total
+    df['gcs_total_imp'] = df[['gcs_eye', 'gcs_verbal', 'gcs_motor']].sum(axis=1).astype(int)
+
+    return df
+
+
+
+def cns_transformation(df):
+    #  Single‐imputation of missing sub‐scores
+    df_local = df.copy()
+    
+    def cns_score(row):
+        non_nan_count = row[['gcs_eye', 'gcs_verbal', 'gcs_motor']].notna().sum()
+        if non_nan_count >= 2:
+            eye    = row['gcs_eye']    if not pd.isna(row['gcs_eye'])    else 4
+            verbal = row['gcs_verbal'] if not pd.isna(row['gcs_verbal']) else 5
+            motor  = row['gcs_motor']  if not pd.isna(row['gcs_motor'])  else 6
+            return eye + verbal + motor
+        else:
+            return np.nan
     
     df_local['cns_score'] = df_local.apply(cns_score, axis=1)
     return df_local

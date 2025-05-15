@@ -1,6 +1,6 @@
 import pandas as pd
 from src.preprocessing_utils.sofa_classification import compute_sofa_scores, classify_sofa_stays, sofa_classification, adding_sepsis_classification_per_stay
-from preprocessing_utils.preprocessing_tools import clean_bloodgas, gcs_verbal_to_numeric, df_to_temporal, forward_fill, adding_sofa_classification, clean_min_max, quantile_bins, cns_transformation, compute_pf_ratio, log_uniform_bins
+from preprocessing_utils.preprocessing_tools import clean_bloodgas, gcs_verbal_to_numeric, df_to_temporal, forward_fill, adding_sofa_classification, clean_min_max, quantile_bins, cns_transformation, compute_pf_ratio, log_uniform_bins, compute_gcs_mice
 from src.preprocessing_utils.stats import lab_value_counts, count_leading_zeros_before_sepsis, sepsis_duration_count, sepsis_nonsepsis_count, plot_distribution_with_bell
 
 
@@ -27,6 +27,7 @@ temporal_df_clean = clean_min_max(temporal_df_clean, column='bilirubin_total', m
 temporal_df_clean = clean_min_max(temporal_df_clean, column='creatinin', min_val=.2, max_val=20, replace=False)
 temporal_df_clean = clean_min_max(temporal_df_clean, column='mean_arterial_pressure', min_val=30, max_val=200, replace=False)
 temporal_df_clean = clean_min_max(temporal_df_clean, column='platelet_count', min_val=10, max_val=1000, replace=False)
+#temporal_df_clean = compute_gcs_mice(temporal_df_clean)
 temporal_df_clean = cns_transformation(temporal_df_clean)
 temporal_df_clean = compute_pf_ratio(temporal_df_clean)
 clean_temporal_df_ff = forward_fill(temporal_df_clean)
