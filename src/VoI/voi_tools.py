@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 from pgmpy.inference import DBNInference
 from pgmpy.factors.discrete import DiscreteFactor
+from typing import Set
+
 
 # ------------------------------------------------------------------ #
 # 0.  Wrapper: unify pgmpy 0.x  vs  ≥1.0  query output
@@ -88,17 +90,16 @@ def expected_ig(infer: DBNInference,
 # ------------------------------------------------------------------ #
 def choose_next_lab(infer: DBNInference,
                     evidence: Dict[Tuple[str, int], int],
-                    lab_cols: List[str],
+                    available_labs: List[str],
                     t: int,
-                    measured: Dict[Tuple[str, int], bool],
-                    min_gain: float = 0.01
+                    min_gain: float = 1e-6        # << very small
                     ) -> Tuple[Optional[str], Dict[str, float]]:
-    gains = {lab: expected_ig(infer, evidence, lab, t)
-             for lab in lab_cols if not measured.get((lab, t), False)}
+    gains = {lab: expected_ig(infer, evidence, lab, t) for lab in available_labs}
     if not gains:
         return None, {}
-    best, best_gain = max(gains.items(), key=lambda kv: kv[1])
-    return (best, gains) if best_gain >= min_gain else (None, gains)
+    best_lab, best_gain = max(gains.items(), key=lambda kv: kv[1])
+    return (best_lab, gains) if best_gain > min_gain else (None, gains)
+
 
 
 # ------------------------------------------------------------------ #
@@ -111,44 +112,62 @@ def simulate_voi_path(df_pat: pd.DataFrame,
                       *,
                       conf_threshold: float = 0.7,
                       missing_bin: Optional[int] = None,
-                      allow_voi: bool = True,
-                      min_gain: float = 0.01) -> List[dict]:
+                      allow_voi: bool = True) -> List[dict]:
+    """
+    1. Add ALL non‐missing (forward‐filled) labs each t.
+    2. From among UNORDERED labs, pick the one with highest EIG *once*.
+    3. Mark it ordered and pull its value (t or first non‐missing in future).
+    4. Compute P(sepsis_t) | current evidence.
+    5. Repeat until threshold or end.
+    """
     df_pat = df_pat.sort_values("timestamp").reset_index(drop=True)
 
     evidence: Dict[Tuple[str, int], int] = {}
-    measured: Dict[Tuple[str, int], bool] = {}
+    ordered: Set[str] = set()      # only labs VoI has requested
     timeline: List[dict] = []
 
-    for t, row in tqdm(df_pat.iterrows(), total=len(df_pat), desc=f"Processing of stay {hadm_id}"):
-        # add factual labs
+    for t, row in df_pat.iterrows():
+        # ── A) Add dataset values (forward-filled) ───────────────────────
         for lab in lab_cols:
             v = row[lab]
             if _not_missing(v, missing_bin):
                 evidence[(lab, t)] = int(v)
-                measured[(lab, t)] = True
 
-        # optional VoI
-        voi_lab, gains = None, {}
+        # ── B) Greedy VoI ordering ───────────────────────────────────────
+        voi_lab, gain = None, None
         if allow_voi:
-            voi_lab, gains = choose_next_lab(
-                infer, evidence, lab_cols, t, measured, min_gain)
-            if voi_lab is not None:
-                fut = df_pat[voi_lab].iloc[t:]
-                ok = fut[fut.apply(_not_missing, args=(missing_bin,))]
-                if not ok.empty:
-                    evidence[(voi_lab, t)] = int(ok.iloc[0])
-                    measured[(voi_lab, t)] = True
+            candidates = [lab for lab in lab_cols if lab not in ordered]
+            if candidates:
+                # compute all gains
+                gains = {lab: expected_ig(infer, evidence, lab, t)
+                         for lab in candidates}
+                # pick best
+                voi_lab = max(gains, key=gains.get)
+                gain    = gains[voi_lab]
+                ordered.add(voi_lab)
 
-        # posterior on sepsis_t
-        fac = _query_factor(infer, [("sepsis", t)], evidence)
+                # attach its measurement immediately (t or next non-missing)
+                v0 = row[voi_lab]
+                if _not_missing(v0, missing_bin):
+                    evidence[(voi_lab, t)] = int(v0)
+                else:
+                    fut = df_pat.loc[t:, voi_lab]
+                    nxt = fut[fut.apply(_not_missing, args=(missing_bin,))]
+                    if not nxt.empty:
+                        evidence[(voi_lab, t)] = int(nxt.iloc[0])
+
+        # ── C) Posterior on sepsis_t ────────────────────────────────────
+        fac   = _query_factor(infer, [("sepsis", t)], evidence)
         probs = _factor_to_array(fac)
+
         timeline.append({
             "t": t,
-            "p_sepsis": float(probs[1]),
+            "p_sepsis":   float(probs[1]),
             "entropy_bits": _entropy_bits(probs),
-            "voi_lab": voi_lab,
-            "gains": gains
+            "voi_lab":    voi_lab,   # the one we just ordered (or None)
+            "gain":       gain       # its EIG
         })
+
         if probs[1] >= conf_threshold:
             break
 
