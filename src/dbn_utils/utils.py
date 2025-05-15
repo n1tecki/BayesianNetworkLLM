@@ -38,8 +38,7 @@ def create_train_test_set(
     #df_copy = df_copy.reset_index(level='sepsis')
     df_copy['sepsis'] = pd.Categorical(df_copy['sepsis'], categories=[0, 1], ordered=False)
     for c in cols:
-        #df_copy[c] = pd.Categorical(df_copy[c]).codes.astype('int8')
-        uniques = sorted(df_copy[c].dropna().unique())
+        uniques = sorted(set(df_copy[c].dropna().unique()) | {0})
         df_copy[c] = pd.Categorical(df_copy[c], categories=uniques, ordered=False)
 
     # Split into training and test data

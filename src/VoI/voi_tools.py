@@ -119,7 +119,7 @@ def simulate_voi_path(df_pat: pd.DataFrame,
     measured: Dict[Tuple[str, int], bool] = {}
     timeline: List[dict] = []
 
-    for t, row in tqdm(df_pat.iterrows(), total=len(df_pat), desc=f"Processing of staf {hadm_id}"):
+    for t, row in tqdm(df_pat.iterrows(), total=len(df_pat), desc=f"Processing of stay {hadm_id}"):
         # add factual labs
         for lab in lab_cols:
             v = row[lab]
