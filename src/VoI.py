@@ -1,4 +1,4 @@
-from src.VoI.voi_evaluation import run_experiment
+from src.VoI.voi_tools import value_of_information
 import pickle, pandas as pd
 import json
 
@@ -13,12 +13,10 @@ with open("data/dbn/inference.pkl", "rb") as f:
 
 df_test = pd.read_parquet("data/dbn/df_test.parquet")
 
-summary = run_experiment(
+summary = value_of_information(
     df_test,
     inference,
-    LAB_COLS,
-    conf_threshold=0.6,
-    missing_bin=MISSING_BIN
+    LAB_COLS
 )
 
 with open("data/VoI/voi_timelines.json", "w", encoding="utf-8") as f:
