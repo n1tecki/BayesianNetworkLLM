@@ -17,7 +17,7 @@ summary = run_experiment(
     df_test,
     inference,
     LAB_COLS,
-    conf_threshold=0.7,
+    conf_threshold=0.6,
     missing_bin=MISSING_BIN
 )
 
