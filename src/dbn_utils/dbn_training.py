@@ -24,6 +24,51 @@ def flatten_df(df, LAB_COLS):
     return flat_df
 
 
+def make_missing_state_uninformative(model, labs, missing_state=0, t_slices=(0, 1)):
+    """
+    For every lab in `labs` and every time slice in `t_slices`
+    force the CPD row that corresponds to `missing_state`
+    to be identical for every configuration of the parents.
+    That removes any predictive power from the '0 = not measured' code.
+    """
+    for lab in labs:
+        for t in t_slices:
+            cpd = model.get_cpds((lab, t))
+
+            # current CPD values
+            vals = cpd.get_values().copy()
+
+            # --- 1. choose a constant row for the missing state ----------
+            #
+            # Here we take the *overall* mean of that row and
+            # reuse it for every parent configuration, but
+            # any constant works as long as it's the same
+            # in every column.
+            #
+            row = missing_state
+            constant = vals[row, :].mean()
+            vals[row, :] = constant
+
+            # --- 2. renormalise each column so it sums to 1 -------------
+            col_sums = vals.sum(axis=0, keepdims=True)
+            vals /= col_sums
+
+            # --- 3. write the patched CPD back into the model ----------
+            new_cpd = TabularCPD(
+                variable=cpd.variable,
+                variable_card=cpd.variable_card,
+                values=vals,
+                evidence=cpd.variables[1:] or None,
+                evidence_card=list(cpd.cardinality[1:]) if cpd.variables[1:] else None,
+                state_names=cpd.state_names,
+            )
+            model.remove_cpds(cpd)
+            model.add_cpds(new_cpd)
+
+    model.check_model()
+    return model
+
+
 
 def dbn_train(flat_df, LAB_COLS, CORRELATION_THRESHOLD = 0.4, alpha=1e-6):
     # — Select possibel edges —————————————————————————————————
@@ -137,6 +182,7 @@ def dbn_train(flat_df, LAB_COLS, CORRELATION_THRESHOLD = 0.4, alpha=1e-6):
 
     model.initialize_initial_state()
     assert model.check_model()
+    model = make_missing_state_uninformative(model, LAB_COLS)
     inference = DBNInference(model)
     return model, inference
 
