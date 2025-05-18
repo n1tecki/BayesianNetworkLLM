@@ -55,5 +55,5 @@ predictions_dict = dbn_predict(df_test,
     LAB_COLS
 )
 
-with open("data/dbn/predictions.json", "w") as f:
+with open("data/dbn/predictions_0_calibrated.json", "w") as f:
     json.dump(predictions_dict, f, indent=2)

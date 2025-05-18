@@ -1,66 +1,150 @@
-from src.dbn_utils.evaluation import predict_df_data, steps_to_threshold, compare_single_threshold, compare_var_thresholds, compare_two_models, plot_accuracy_bars
+# dbn_eval.py  – run with:  python dbn_eval.py
 import json
+from pathlib import Path
+
+import numpy as np
 import pandas as pd
+from sklearn.metrics import confusion_matrix
 
+from src.dbn_utils.evaluation_time import (
+    compare_single_threshold,
+    compare_var_thresholds,
+    compare_two_models,
+    plot_accuracy_bars,
+)
 
+# ------------------------------------------------------------------
+# parameters
+# ------------------------------------------------------------------
+DBN_THR  = 0.50          # DBN probability threshold
+SOFA_THR = 2             # SOFA-total threshold
 
-# Load SOFA and DBN classifications
+# ------------------------------------------------------------------
+# load data
+# ------------------------------------------------------------------
 sofa_df = pd.read_parquet("data/preprocessing/sofa_df_classified.parquet")
-sofa_df.index.name = 'hadm_id'
+sofa_df.index.names = ["hadm_id", "timestamp"]
+sofa_df = sofa_df.sort_index(level="timestamp")
 
 df_test = pd.read_parquet("data/dbn/df_test.parquet")
-test_ids = df_test.index.unique()
+df_test = df_test.sort_values(["hadm_id", "timestamp"])
 
-with open('data/predictions.json') as f:
+with Path("data/dbn/predictions_0_calibrated.json").open() as f:
     predictions_dict = json.load(f)
 
+test_ids = df_test.index.unique()
 
-# Compare DBN probabilities to SOFA scores
-# Neutral decision boundry would be 0.5
-dbn_thr = .7
-sofa_thr = 2
-runs = []
-correct_runs = []
-dbn_sepsis_preds = []
-sofa_sepsis_preds = []
-correct_dbn_sepsis_preds = []
-correct_sofa_sepsis_preds = []
-ground_truth_sepsis = []
+# ------------------------------------------------------------------
+# build per-stay timelines
+# ------------------------------------------------------------------
+runs, septic_runs, correct_septic_runs = [], [], []
+dbn_sepsis_preds, sofa_sepsis_preds, ground_truth = [], [], []
 
 for hadm in test_ids:
-    # Sepsis timeline
-    y_dbn = list(predictions_dict[str(hadm)].values())
-    y_sofa = sofa_df.loc[hadm, 'sofa_total'].tolist()
-    runs.append((y_dbn, y_sofa))
 
-    # Sepsis classification
-    dbn_sepsis_preds.append(1 if any(x >= dbn_thr for x in y_dbn) else 0)
-    sofa_sepsis_preds.append(1 if any(x >= sofa_thr for x in y_sofa) else 0)
-    ground_truth_sepsis.append(sofa_df.loc[hadm, 'sepsis'].iloc[0])
+    # ------------------------------------------------------------
+    # 1. build DBN & SOFA time-series (same as before)
+    # ------------------------------------------------------------
+    y_dbn = [pred for _, pred in sorted(
+                 predictions_dict[str(hadm)].items(), key=lambda kv: int(kv[0]))]
 
-# Get only correct predictions
-for idx, truth in enumerate(ground_truth_sepsis):
-    if (dbn_sepsis_preds[idx] == truth and
-        sofa_sepsis_preds[idx] == truth):
-        correct_dbn_sepsis_preds.append(runs[idx][0])
-        correct_sofa_sepsis_preds.append(runs[idx][1])
-        correct_runs.append(runs[idx])
+    dbn_rows = df_test.loc[hadm]
+    if isinstance(dbn_rows, pd.Series):
+        dbn_rows = dbn_rows.to_frame().T
+    dbn_rows = dbn_rows.sort_values("timestamp")
+    ts_dbn   = pd.to_datetime(dbn_rows["timestamp"]).tolist()
 
-# Single-threshold comparison
-earlier, later, equal, deltas = compare_single_threshold(correct_runs, dbn_thr, sofa_thr)
+    L = min(len(y_dbn), len(ts_dbn))
+    y_dbn, ts_dbn = y_dbn[:L], ts_dbn[:L]
 
-# Sweep 0.5-1.0 and plot proportion where y_dbn is earlier
-thr, earlier_p, later_p, equal_p = compare_var_thresholds(runs)
+    sofa_rows = sofa_df.loc[hadm]
+    if isinstance(sofa_rows, pd.Series):
+        sofa_rows = sofa_rows.to_frame().T
+    sofa_rows = sofa_rows.sort_index()
+    y_sofa  = sofa_rows["sofa_total"].tolist()
+    ts_sofa = sofa_rows.index.tolist()
 
-# Prediction accuracy
-metrics, mcnemar_res = compare_two_models(ground_truth_sepsis,
-                                          dbn_sepsis_preds, ground_truth_sepsis,
-                                          label_a="DBN", label_b="SOFA")
+    L2 = min(len(y_sofa), len(ts_sofa))
+    y_sofa, ts_sofa = y_sofa[:L2], ts_sofa[:L2]
 
-print(metrics[["accuracy", "acc_CI_low", "acc_CI_high",
-               "sensitivity", "specificity", "MCC"]].round(3))
+    run_tuple = (y_dbn, ts_dbn, y_sofa, ts_sofa)
+    runs.append(run_tuple)
 
-print("\nMcNemar's χ² = {:.4f}, p-value = {:.4f}"
+    # ------------------------------------------------------------
+    # 2. stay-level ground truth  (from df_test only!)
+    # ------------------------------------------------------------
+    sepsis_vals = df_test.loc[hadm, "sepsis"]
+    label = int(sepsis_vals.astype(int).max()) if isinstance(sepsis_vals, pd.Series) else int(sepsis_vals)
+    ground_truth.append(label)
+
+    # ------------------------------------------------------------
+    # 3. stay-level predictions
+    # ------------------------------------------------------------
+    dbn_pred  = int(any(p >= DBN_THR  for p in y_dbn))
+    sofa_pred = int(any(s >= SOFA_THR for s in y_sofa))
+    dbn_sepsis_preds.append(dbn_pred)
+    sofa_sepsis_preds.append(sofa_pred)
+
+    # ------------------------------------------------------------
+    # 4. collect subsets
+    # ------------------------------------------------------------
+    if label == 1:                       # all septic stays
+        septic_runs.append(run_tuple)
+
+        if dbn_pred == 1 and sofa_pred == 1:     # …and both models correct
+            correct_septic_runs.append(run_tuple)
+
+# ------------------------------------------------------------------
+# sanity-check distribution
+# ------------------------------------------------------------------
+print("\nStay-level label distribution in test set")
+
+print(pd.Series(ground_truth).value_counts().sort_index()
+      .rename({0: "non-sepsis", 1: "sepsis"}))
+
+# ------------------------------------------------------------------
+# lead-time analysis  (septic only)
+# ------------------------------------------------------------------
+earlier, later, equal, d_steps, d_hours = compare_single_threshold(
+        correct_septic_runs, dbn_thr=DBN_THR, sofa_thr=SOFA_THR, show_plots=True)
+
+print("\nLead-time analysis (ground-truth sepsis stays)")
+print(f"  • DBN earlier  : {earlier:5d}")
+print(f"  • SOFA earlier : {later:5d}")
+print(f"  • tie          : {equal:5d}")
+if d_hours:
+    print(f"Median lead (hours): {pd.Series(d_hours).median():.1f}")
+
+# ------------------------------------------------------------------
+# DBN threshold sweep  (all stays)
+# ------------------------------------------------------------------
+compare_var_thresholds(correct_septic_runs, y_threshold=SOFA_THR)
+
+# ------------------------------------------------------------------
+# accuracy, CIs, McNemar
+# ------------------------------------------------------------------
+metrics_df, mcnemar_res = compare_two_models(
+        ground_truth, dbn_sepsis_preds, sofa_sepsis_preds,
+        label_a="DBN", label_b="SOFA")
+
+print("\nAccuracy metrics")
+print(metrics_df[["accuracy", "acc_CI_low", "acc_CI_high",
+                  "sensitivity", "specificity", "MCC"]].round(3))
+
+print("\nMcNemar χ² = {:.4f},   p = {:.4f}"
       .format(mcnemar_res.statistic, mcnemar_res.pvalue))
 
-plot_accuracy_bars(metrics, title="DBN vs SOFA - Sepsis Detection")
+plot_accuracy_bars(metrics_df, title="DBN vs SOFA – sepsis detection")
+
+# ------------------------------------------------------------------
+# per-model confusion matrices
+# ------------------------------------------------------------------
+def print_cm(y_true, y_pred, label):
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+    print(f"\nConfusion matrix – {label}")
+    print("             Pred 0   Pred 1")
+    print(f"True 0 |   {tn:5d}     {fp:5d}")
+    print(f"True 1 |   {fn:5d}     {tp:5d}")
+
+print_cm(ground_truth, dbn_sepsis_preds,  "DBN")
+print_cm(ground_truth, sofa_sepsis_preds, "SOFA")

@@ -6,7 +6,6 @@ LAB_COLS = [
     "pf_ratio", "bilirubin_total", "creatinin",
     "cns_score", "mean_arterial_pressure", "platelet_count",
 ]
-MISSING_BIN = 3
 
 with open("data/dbn/inference.pkl", "rb") as f:
     inference = pickle.load(f)
@@ -19,7 +18,7 @@ summary = value_of_information(
     LAB_COLS
 )
 
-with open("data/VoI/voi_timelines.json", "w", encoding="utf-8") as f:
+with open("data/VoI/voi_timelines_0_calibrated.json", "w", encoding="utf-8") as f:
     json.dump(summary, f, ensure_ascii=False, indent=2)
 
 print("Average lead-time (+ ⇒ earlier):", summary["lead_time"].mean())
