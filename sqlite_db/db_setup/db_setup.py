@@ -42,15 +42,15 @@ _MIMIC_TABLES = (
     'services',
     'transfers',
     # ICU derived tables
-    #'caregiver',
-    #'chartevents',
-    #'d_items',
-    #'datetimeevents',
-    #'icustays',
-    #'ingredientevents',
-    #'inputevents',
-    #'outputevents',
-    #'procedureevents',
+    'caregiver',
+    'chartevents',
+    'd_items',
+    'datetimeevents',
+    'icustays',
+    'ingredientevents',
+    'inputevents',
+    'outputevents',
+    'procedureevents',
 )
 
 def process_dataframe(df: pd.DataFrame, subjects: t.Optional[t.List[int]] = None) -> pd.DataFrame:
