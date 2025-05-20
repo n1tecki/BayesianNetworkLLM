@@ -73,7 +73,7 @@ def compare_single_threshold(runs, dbn_thr=0.7, sofa_thr=2, show_plots=True):
         # convert once
         delta_min = np.array(deltas_hours) * 60.0
 
-        fig, ax = plt.subplots(1, 3, figsize=(14, 4))
+        fig, ax = plt.subplots(1, 2, figsize=(14, 4))
 
         # --- panel 0: steps ---------------------------------------
         bins_steps = range(min(deltas_steps), max(deltas_steps) + 2)
@@ -90,20 +90,21 @@ def compare_single_threshold(runs, dbn_thr=0.7, sofa_thr=2, show_plots=True):
         ax[1].set_title("Δ hours")
         ax[1].set_xlabel("Hours")
         ax[1].set_ylabel("Frequency")
-        ax[1].set_xlim(-max_hours, max_hours)          # ← add this line
+        ax[1].set_xlim(-50, 50)
+        #ax[1].set_xlim(-max_hours, max_hours)
 
         # --- panel 2: minutes, ±10 000 min, 1-min bins ------------
-        delta_m_clip = np.clip(delta_min, -max_minutes, max_minutes)
-        bins_m = np.arange(-max_minutes, max_minutes + 1, 1)
-        ax[2].hist(delta_m_clip, bins=bins_m, edgecolor="black")
-        ax[2].axvline(0, ls="--", lw=0.8)
-        ax[2].set_title("Δ minutes")
-        ax[2].set_xlabel("Minutes")
-        ax[2].set_ylabel("Frequency")
-        ax[2].set_xlim(-max_minutes, max_minutes)      # ← and this one
+        # delta_m_clip = np.clip(delta_min, -max_minutes, max_minutes)
+        # bins_m = np.arange(-max_minutes, max_minutes + 1, 1)
+        # ax[2].hist(delta_m_clip, bins=bins_m, edgecolor="black")
+        # ax[2].axvline(0, ls="--", lw=0.8)
+        # ax[2].set_title("Δ minutes")
+        # ax[2].set_xlabel("Minutes")
+        # ax[2].set_ylabel("Frequency")
+        # ax[2].set_xlim(-max_minutes, max_minutes)      # ← and this one
 
-        plt.tight_layout()
-        plt.show()
+        # plt.tight_layout()
+        # plt.show()
 
     return earlier, later, equal, deltas_steps, deltas_hours
 
