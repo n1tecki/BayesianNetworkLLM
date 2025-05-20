@@ -5,3 +5,7 @@ pgmpy
 numpy
 pandas
 lightgbm
+statsmodels
+scikit-learn
+pyvis
+pyarrow
