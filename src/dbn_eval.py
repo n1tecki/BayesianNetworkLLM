@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.metrics import confusion_matrix
-
+from src.dbn_utils.metrics import metrics_vs_threshold_runs
 from src.dbn_utils.evaluation_time import (
     compare_single_threshold,
     compare_var_thresholds,
@@ -119,6 +119,12 @@ if d_hours:
 # DBN threshold sweep  (all stays)
 # ------------------------------------------------------------------
 compare_var_thresholds(correct_septic_runs, y_threshold=SOFA_THR)
+compare_var_thresholds(correct_septic_runs, y_threshold=3)
+compare_var_thresholds(correct_septic_runs, y_threshold=4)
+compare_var_thresholds(correct_septic_runs, y_threshold=5)
+compare_var_thresholds(correct_septic_runs, y_threshold=6)
+compare_var_thresholds(correct_septic_runs, y_threshold=7)
+compare_var_thresholds(correct_septic_runs, y_threshold=8)
 
 # ------------------------------------------------------------------
 # accuracy, CIs, McNemar
@@ -148,3 +154,12 @@ def print_cm(y_true, y_pred, label):
 
 print_cm(ground_truth, dbn_sepsis_preds,  "DBN")
 print_cm(ground_truth, sofa_sepsis_preds, "SOFA")
+
+
+# --- DBN probability sweep ---------------------------------------
+dbn_thrs = np.arange(0.50, 0.95, 0.01)
+metrics_vs_threshold_runs(runs, ground_truth, dbn_thrs, model="DBN")
+
+# --- SOFA total sweep --------------------------------------------
+sofa_thrs = np.arange(2, 15, 1)
+metrics_vs_threshold_runs(runs, ground_truth, sofa_thrs, model="SOFA")
