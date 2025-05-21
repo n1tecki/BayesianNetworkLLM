@@ -35,28 +35,25 @@ def time_to_threshold(sequence, timestamps, threshold):
 # timing-aware comparison
 # ---------------------------------------------------------------------------
 
-def compare_single_threshold(runs, dbn_thr=0.7, sofa_thr=2,
-                                 max_hours=500, show_plots=True):
+def compare_single_threshold(runs, dbn_thr=0.7, sofa_thr=2, show_plots=True):
     """
-    Compare lead-times for one fixed (dbn_thr, sofa_thr) pair and
-    visualise the Δ distributions with bar charts.
+    Compare lead-times for one fixed pair of thresholds.
 
-    Returns
-    -------
-    earlier, later, equal, deltas_steps, deltas_hours
+    Each run: (y_dbn, ts_dbn, y_sofa, ts_sofa)
+    Returns counts and the raw Δ lists (steps and hours).
     """
     earlier = later = equal = 0
     deltas_steps, deltas_hours = [], []
 
-    # ---------------- collect the deltas -----------------
     for y_dbn, ts_dbn, y_sofa, ts_sofa in runs:
+
         idx_dbn  = steps_to_threshold(y_dbn,  dbn_thr)
         idx_sofa = steps_to_threshold(y_sofa, sofa_thr)
         t_dbn    = time_to_threshold(y_dbn,  ts_dbn,  dbn_thr)
         t_sofa   = time_to_threshold(y_sofa, ts_sofa, sofa_thr)
 
         if idx_dbn is None or idx_sofa is None:
-            continue          # at least one model never fired
+            continue          # one model never fired
 
         step_delta = idx_dbn - idx_sofa
         time_delta = (t_dbn - t_sofa).total_seconds() / 3600.0  # hours
@@ -68,42 +65,32 @@ def compare_single_threshold(runs, dbn_thr=0.7, sofa_thr=2,
         elif step_delta > 0: later   += 1
         else:                equal   += 1
 
-    # ----------------------- plots -----------------------
+    # --------------------- plots ---------------------
     if show_plots and deltas_steps:
-        # ---------- PLOT 1 : Δ labs (steps) --------------
-        xs_steps = np.arange(min(deltas_steps), max(deltas_steps) + 1)
-        # shift to start at zero for bincount
-        counts_steps = np.bincount(np.array(deltas_steps) - xs_steps[0])
+        max_hours   = 500
+        max_minutes = 10000
 
-        plt.figure(figsize=(7, 4))
-        plt.bar(xs_steps, counts_steps, width=0.8, edgecolor="black")
-        plt.xticks(xs_steps)                       # tick under each bar
-        plt.title("Δ labs (DBN − SOFA)")
-        plt.xlabel("Labs")
-        plt.ylabel("Frequency")
-        plt.tight_layout()
+        # convert once
+        delta_min = np.array(deltas_hours) * 60.0
 
-        # ---------- PLOT 2 : Δ hours (1-h bins) ----------
-        # clip to ±max_hours   (keeps outlying bars readable)
+        fig, ax = plt.subplots(1, 2, figsize=(14, 4))
+
+        # --- panel 0: steps ---------------------------------------
+        bins_steps = range(min(deltas_steps), max(deltas_steps) + 2)
+        ax[0].hist(deltas_steps, bins=bins_steps, edgecolor="black")
+        ax[0].set_title("Δ labs (DBN − SOFA)")
+        ax[0].set_xlabel("Labs")
+        ax[0].set_ylabel("Frequency")
+
+        # --- panel 1: hours, ±500 h, 1-h bins ---------------------
         delta_h_clip = np.clip(deltas_hours, -max_hours, max_hours)
-
-        # build integer-hour bins centred on the integers
-        mins = int(np.floor(delta_h_clip.min()))
-        maxs = int(np.ceil (delta_h_clip.max()))
-        xs_hours = np.arange(mins, maxs + 1)
-        counts_hours, _ = np.histogram(
-            delta_h_clip, bins=np.arange(mins - 0.5, maxs + 1.5))
-
-        plt.figure(figsize=(7, 4))
-        plt.bar(xs_hours, counts_hours, width=0.8,
-                edgecolor="black", align="center")
-        plt.axvline(0, ls="--", lw=0.8)
-        plt.xlim(-50, 50)                          # zoom in on ±50 h
-        plt.xticks(np.arange(-50, 51, 1))         # every 10 h
-        plt.title("Δ hours")
-        plt.xlabel("Hours")
-        plt.ylabel("Frequency")
-        plt.tight_layout()
+        bins_h = np.arange(-max_hours, max_hours + 1, 1)
+        ax[1].hist(delta_h_clip, bins=bins_h, edgecolor="black")
+        ax[1].axvline(0, ls="--", lw=0.8)
+        ax[1].set_title("Δ hours")
+        ax[1].set_xlabel("Hours")
+        ax[1].set_ylabel("Frequency")
+        ax[1].set_xlim(-50, 50)
 
         #ax[1].set_xlim(-max_hours, max_hours)
 
