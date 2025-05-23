@@ -11,6 +11,7 @@ from src.dbn_utils.evaluation_time import (
     compare_var_thresholds,
     compare_two_models,
     plot_accuracy_bars,
+    plot_outcome_heatmaps
 )
 
 # ------------------------------------------------------------------
@@ -112,12 +113,15 @@ print("\nLead-time analysis (ground-truth sepsis stays)")
 print(f"  • DBN earlier  : {earlier:5d}")
 print(f"  • SOFA earlier : {later:5d}")
 print(f"  • tie          : {equal:5d}")
-if d_hours:
-    print(f"Median lead (hours): {pd.Series(d_hours).median():.1f}")
+
+print(f"Median lead (lab values): {pd.Series(d_steps).median():.1f}")
+print(f"Median lead (hours): {pd.Series(d_hours).median():.1f}")
 
 # ------------------------------------------------------------------
 # DBN threshold sweep  (all stays)
 # ------------------------------------------------------------------
+plot_outcome_heatmaps(correct_septic_runs)
+
 compare_var_thresholds(correct_septic_runs, y_threshold=SOFA_THR)
 compare_var_thresholds(correct_septic_runs, y_threshold=3)
 compare_var_thresholds(correct_septic_runs, y_threshold=4)

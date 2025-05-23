@@ -1,5 +1,5 @@
 """
-Evaluation utilities – step- and time-aware.
+Evaluation utilities - step- and time-aware.
 """
 
 import numpy as np
@@ -35,6 +35,9 @@ def time_to_threshold(sequence, timestamps, threshold):
 # timing-aware comparison
 # ---------------------------------------------------------------------------
 
+import numpy as np
+import matplotlib.pyplot as plt
+
 def compare_single_threshold(runs, dbn_thr=0.7, sofa_thr=2, show_plots=True):
     """
     Compare lead-times for one fixed pair of thresholds.
@@ -46,14 +49,13 @@ def compare_single_threshold(runs, dbn_thr=0.7, sofa_thr=2, show_plots=True):
     deltas_steps, deltas_hours = [], []
 
     for y_dbn, ts_dbn, y_sofa, ts_sofa in runs:
-
         idx_dbn  = steps_to_threshold(y_dbn,  dbn_thr)
         idx_sofa = steps_to_threshold(y_sofa, sofa_thr)
         t_dbn    = time_to_threshold(y_dbn,  ts_dbn,  dbn_thr)
         t_sofa   = time_to_threshold(y_sofa, ts_sofa, sofa_thr)
 
         if idx_dbn is None or idx_sofa is None:
-            continue          # one model never fired
+            continue  # one model never fired
 
         step_delta = idx_dbn - idx_sofa
         time_delta = (t_dbn - t_sofa).total_seconds() / 3600.0  # hours
@@ -61,37 +63,36 @@ def compare_single_threshold(runs, dbn_thr=0.7, sofa_thr=2, show_plots=True):
         deltas_steps.append(step_delta)
         deltas_hours.append(time_delta)
 
-        if   step_delta < 0: earlier += 1
-        elif step_delta > 0: later   += 1
-        else:                equal   += 1
+        if step_delta < 0: earlier += 1
+        elif step_delta > 0: later += 1
+        else: equal += 1
 
-    # --------------------- plots ---------------------
+    # --- steps histogram (separate plot) ---
     if show_plots and deltas_steps:
-        max_hours   = 500
-        max_minutes = 10000
-
-        # convert once
-        delta_min = np.array(deltas_hours) * 60.0
-
-        fig, ax = plt.subplots(1, 2, figsize=(14, 4))
-
-        # --- panel 0: steps ---------------------------------------
         bins_steps = range(min(deltas_steps), max(deltas_steps) + 2)
-        ax[0].hist(deltas_steps, bins=bins_steps, edgecolor="black")
-        ax[0].set_title("Δ labs (DBN − SOFA)")
-        ax[0].set_xlabel("Labs")
-        ax[0].set_ylabel("Frequency")
+        plt.figure(figsize=(7, 4))
+        plt.hist(deltas_steps, bins=bins_steps, edgecolor="black", color="#8ca6c8", alpha=1.0)
+        plt.title("Δ labs (DBN − SOFA)")
+        plt.xlabel("Labs")
+        plt.ylabel("Frequency")
+        plt.xticks(list(bins_steps))
+        plt.tight_layout()
+        plt.show()
 
-        # --- panel 1: hours, ±500 h, 1-h bins ---------------------
+        # --- hours histogram (separate plot) ---
+        max_hours = 500
         delta_h_clip = np.clip(deltas_hours, -max_hours, max_hours)
         bins_h = np.arange(-max_hours, max_hours + 1, 1)
-        ax[1].hist(delta_h_clip, bins=bins_h, edgecolor="black")
-        ax[1].axvline(0, ls="--", lw=0.8)
-        ax[1].set_title("Δ hours")
-        ax[1].set_xlabel("Hours")
-        ax[1].set_ylabel("Frequency")
-        ax[1].set_xlim(-50, 50)
-
+        plt.figure(figsize=(7, 4))
+        plt.hist(delta_h_clip, bins=bins_h, edgecolor="black", color="#8ca6c8", alpha=1.0)
+        plt.axvline(0, ls="--", lw=0.8)
+        plt.title("Δ hours")
+        plt.xlabel("Hours")
+        plt.ylabel("Frequency")
+        plt.xlim(-50, 50)
+        plt.xticks(np.arange(-50, 51, 3))
+        plt.tight_layout()
+        plt.show()
         #ax[1].set_xlim(-max_hours, max_hours)
 
         # --- panel 2: minutes, ±10 000 min, 1-min bins ------------
@@ -226,12 +227,91 @@ def plot_accuracy_bars(metrics_df, title="Classification accuracy"):
     err_low  = acc - metrics_df["acc_CI_low"].values
     err_up   = metrics_df["acc_CI_high"].values - acc
 
-    ax.bar(xpos, acc, yerr=[err_low, err_up], capsize=6)
+    ax.bar(xpos, acc, yerr=[err_low, err_up], capsize=6, color="#8ca6c8", alpha=1.0)
     ax.set_xticks(xpos)
     ax.set_xticklabels(metrics_df.index)
     ax.set_ylabel("Accuracy")
     ax.set_ylim(0, 1)
     ax.set_title(title)
     ax.yaxis.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_outcome_heatmaps(runs,
+                          yhat_thrs=np.arange(0.50, 1.01, 0.01),
+                          y_thrs   =np.arange(2, 9)):
+    """
+    Draw three side-by-side heat-maps showing the proportion of runs
+    in which the DBN fires earlier, later, or in a tie relative to a
+    clinical SOFA threshold.
+
+    Parameters
+    ----------
+    runs : list of tuples
+        Each element must be (y_hat, ts_hat, y, ts_sofa) exactly as in your
+        existing `correct_septic_runs`.
+    yhat_thrs : 1-D array-like, optional
+        Probability thresholds to test for the DBN output.
+    y_thrs : 1-D array-like, optional
+        Integer SOFA thresholds to test.
+
+    Returns
+    -------
+    None
+    """
+    n_y   = len(y_thrs)
+    n_hat = len(yhat_thrs)
+
+    # Matrices for the three outcomes
+    early  = np.full((n_y, n_hat), np.nan)
+    late   = np.full_like(early, np.nan)
+    tied   = np.full_like(early, np.nan)
+
+    # ---- build the outcome grids ------------------------------------------
+    for i, y_thr in enumerate(y_thrs):
+        for j, h_thr in enumerate(yhat_thrs):
+
+            e = l = t = tot = 0
+            for y_hat, _ts_hat, y, _ts_sofa in runs:
+                s_hat = steps_to_threshold(y_hat, h_thr)
+                s_y   = steps_to_threshold(y,    y_thr)
+                if s_hat is None or s_y is None:
+                    continue
+
+                tot += 1
+                if   s_hat < s_y: e += 1
+                elif s_hat > s_y: l += 1
+                else:             t += 1
+
+            if tot:
+                early[i, j] = e / tot
+                late[i, j]  = l / tot
+                tied[i, j]  = t / tot
+    # -----------------------------------------------------------------------
+
+    # ---- plotting ----------------------------------------------------------
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4),
+                             sharex=True, sharey=True)
+
+    vmin, vmax = 0.0, 1.0   # common colour scale
+    titles = ("DBN fires earlier",
+              "DBN fires later",
+              "Tie")
+
+    for ax, M, title in zip(axes,
+                            (early, late, tied),
+                            titles):
+        im = ax.pcolormesh(yhat_thrs, y_thrs, M,
+                           shading="auto", cmap="viridis",
+                           vmin=vmin, vmax=vmax)
+        ax.set_title(title)
+        ax.set_xlabel("DBN probability threshold")
+
+    axes[0].set_ylabel("SOFA threshold")
+    fig.colorbar(im, ax=axes, shrink=0.8,
+                 label="Proportion")
+    fig.suptitle("Outcome proportions across (DBN, SOFA) threshold grid",
+                 y=1.03, fontsize=14)
     plt.tight_layout()
     plt.show()
