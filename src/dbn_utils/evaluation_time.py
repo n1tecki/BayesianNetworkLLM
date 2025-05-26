@@ -239,7 +239,7 @@ def plot_accuracy_bars(metrics_df, title="Classification accuracy"):
 
 
 def plot_outcome_heatmaps(runs,
-                          yhat_thrs=np.arange(0.50, 1.01, 0.01),
+                          yhat_thrs=np.arange(0.50, 0.98, 0.01),
                           y_thrs   =np.arange(2, 9)):
     """
     Draw three side-by-side heat-maps showing the proportion of runs
@@ -291,16 +291,16 @@ def plot_outcome_heatmaps(runs,
     # -----------------------------------------------------------------------
 
     # ---- plotting ----------------------------------------------------------
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4),
+    fig, axes = plt.subplots(1, 2, figsize=(11, 5),
                              sharex=True, sharey=True)
 
     vmin, vmax = 0.0, 1.0   # common colour scale
     titles = ("DBN fires earlier",
-              "DBN fires later",
-              "Tie")
+              "DBN fires later")
+              #"Tie")
 
     for ax, M, title in zip(axes,
-                            (early, late, tied),
+                            (early, late), #tied),
                             titles):
         im = ax.pcolormesh(yhat_thrs, y_thrs, M,
                            shading="auto", cmap="viridis",
@@ -309,9 +309,13 @@ def plot_outcome_heatmaps(runs,
         ax.set_xlabel("DBN probability threshold")
 
     axes[0].set_ylabel("SOFA threshold")
-    fig.colorbar(im, ax=axes, shrink=0.8,
+
+    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
+    fig.colorbar(axes[1].collections[0], cax=cbar_ax,
                  label="Proportion")
-    fig.suptitle("Outcome proportions across (DBN, SOFA) threshold grid",
-                 y=1.03, fontsize=14)
-    plt.tight_layout()
+
+    # make room so the heatmaps don’t get squeezed
+    plt.subplots_adjust(right=0.9, top=0.9, bottom=0.15)
+
+    fig.suptitle("Outcome proportions across (DBN, SOFA) threshold grid", y=1.04, fontsize=14)
     plt.show()

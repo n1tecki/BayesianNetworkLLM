@@ -123,12 +123,12 @@ print(f"Median lead (hours): {pd.Series(d_hours).median():.1f}")
 plot_outcome_heatmaps(correct_septic_runs)
 
 compare_var_thresholds(correct_septic_runs, y_threshold=SOFA_THR)
-compare_var_thresholds(correct_septic_runs, y_threshold=3)
-compare_var_thresholds(correct_septic_runs, y_threshold=4)
-compare_var_thresholds(correct_septic_runs, y_threshold=5)
-compare_var_thresholds(correct_septic_runs, y_threshold=6)
-compare_var_thresholds(correct_septic_runs, y_threshold=7)
-compare_var_thresholds(correct_septic_runs, y_threshold=8)
+#compare_var_thresholds(correct_septic_runs, y_threshold=3)
+#compare_var_thresholds(correct_septic_runs, y_threshold=4)
+#compare_var_thresholds(correct_septic_runs, y_threshold=5)
+#compare_var_thresholds(correct_septic_runs, y_threshold=6)
+#compare_var_thresholds(correct_septic_runs, y_threshold=7)
+#compare_var_thresholds(correct_septic_runs, y_threshold=8)
 
 # ------------------------------------------------------------------
 # accuracy, CIs, McNemar

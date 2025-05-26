@@ -1,6 +1,7 @@
 from src.dbn_utils.dbn_training import dbn_train, flatten_df, dbn_predict
 from src.dbn_utils.graph_visualisation import network_visualisation
 from src.dbn_utils.utils import create_train_test_set
+from src.dbn_utils.cpds_plot import plot_all_cpds_heatmap
 import matplotlib.pyplot as plt
 import pandas as pd
 import json
@@ -47,6 +48,8 @@ with open('data/dbn/inference.pkl', 'wb') as f_inf:
     pickle.dump(inference, f_inf)
 
 
+plot_all_cpds_heatmap(model.get_cpds(), indices=[0,3,7], n_cols=3)
+
 
 # ---------- PREDICT DATA ----------------------------------------
 # Predictions on new data
@@ -55,5 +58,5 @@ predictions_dict = dbn_predict(df_test,
     LAB_COLS
 )
 
-with open("data/dbn/predictions_0_calibrated.json", "w") as f:
+with open("data/dbn/predictions_240525.json", "w") as f:
     json.dump(predictions_dict, f, indent=2)

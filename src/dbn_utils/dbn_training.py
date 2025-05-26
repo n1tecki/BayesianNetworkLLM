@@ -9,7 +9,6 @@ from tqdm import tqdm
 
 
 def flatten_df(df, LAB_COLS):
-    # — Configuration ——————————————————————————————————————————
     df = df.groupby(level="hadm_id").filter(lambda group: len(group) > 1)
 
     # Flatten dataframe into two time slices (t0 -> t1)
@@ -22,6 +21,44 @@ def flatten_df(df, LAB_COLS):
     flat_df = two_slice(df, LAB_COLS)
 
     return flat_df
+
+
+def structure_learning(df, LAB_COLS, CORRELATION_THRESHOLD=0.4):
+    # Select possibel edges
+    slice1_cols = [f"{v}_1" for v in ["sepsis"] + LAB_COLS]
+    corr_matrix   = df[slice1_cols].corr("spearman").abs()
+
+    blacklist_edges = set()
+
+    # 1) Never allow any lab → sepsis (at the same time slice)
+    for t in (0, 1):
+        for lab in LAB_COLS:
+            blacklist_edges.add((f"{lab}_{t}", f"sepsis_{t}"))
+
+    # 2) Never allow any lab at t=1 to point backwards to t=0
+    for lab in LAB_COLS:
+        for var in ["sepsis"] + LAB_COLS:
+            blacklist_edges.add((f"{lab}_1", f"{var}_0"))
+
+    for l1 in LAB_COLS:
+        for l2 in LAB_COLS:
+            if l1 != l2 and corr_matrix.loc[f"{l1}_1", f"{l2}_1"] < CORRELATION_THRESHOLD:
+                # disallow l1_1 -> l2_1 *and* l2_1 -> l1_1
+                blacklist_edges.add((f"{l1}_1", f"{l2}_1"))
+                blacklist_edges.add((f"{l2}_1", f"{l1}_1"))
+
+    # Structure Learning 
+    structure_estimator = HillClimbSearch(df[slice1_cols])
+    estimated_model = structure_estimator.estimate(
+        scoring_method='bic-d',
+        tabu_length=20,
+        epsilon=0.0001,
+        expert_knowledge=ExpertKnowledge(
+        forbidden_edges=list(blacklist_edges)),
+        #search_space=list(whitelist_edges))
+    )
+
+    return estimated_model
 
 
 def make_missing_state_uninformative(model, labs, missing_state=0, t_slices=(0, 1)):
@@ -71,44 +108,9 @@ def make_missing_state_uninformative(model, labs, missing_state=0, t_slices=(0, 
 
 
 def dbn_train(flat_df, LAB_COLS, CORRELATION_THRESHOLD = 0.4, alpha=1e-6):
-    # — Select possibel edges —————————————————————————————————
-    slice1_cols = [f"{v}_1" for v in ["sepsis"] + LAB_COLS]
-    corr_matrix = flat_df[slice1_cols].corr("spearman").abs()
-    
-    whitelist_edges = set()
 
-    # sepsis(1) -> every lab(1)
-    whitelist_edges |= {("sepsis_1", f"{lab}_1") for lab in LAB_COLS} 
-
-    # Edges between each lab t0 and each lab t1
-    for var in ["sepsis"] + LAB_COLS:
-        whitelist_edges.add((f"{var}_0", f"{var}_1"))
-
-    # lab-lab edges at t=1 with ρ ≥ threshold
-    for l1 in LAB_COLS:
-        for l2 in LAB_COLS:
-            if l1 != l2 and corr_matrix.loc[f"{l1}_1", f"{l2}_1"] >= CORRELATION_THRESHOLD:
-                whitelist_edges.add((f"{l1}_1", f"{l2}_1"))
-
-
-    # Define forbidden edges (blacklist)
-    all_vars = list(flat_df.columns)
-    all_possible_edges = set(permutations(slice1_cols, 2))
-    blacklist_edges = all_possible_edges - whitelist_edges
-
-
-    # — Structure Learning ———————————————————————————————————————
-    structure_estimator = HillClimbSearch(flat_df[slice1_cols])
-    estimated_model = structure_estimator.estimate(
-        scoring_method='bic-d',
-        expert_knowledge=ExpertKnowledge(
-        forbidden_edges=list(blacklist_edges),
-        search_space=list(whitelist_edges))
-    )
-
-    # keep only edges WITH child in slice 1  (child endswith '_1')
-    # in_slice_edges = [(u, v) for u, v in estimated_model.edges() if v.endswith("_1")]
-
+    # Learning of the structure of the DBN
+    estimated_model = structure_learning(flat_df, LAB_COLS, CORRELATION_THRESHOLD)
 
     # — DBN Model Creation ———————————————————————————————————————
     model = DBN()
@@ -185,6 +187,8 @@ def dbn_train(flat_df, LAB_COLS, CORRELATION_THRESHOLD = 0.4, alpha=1e-6):
     model = make_missing_state_uninformative(model, LAB_COLS)
     inference = DBNInference(model)
     return model, inference
+
+
 
 
 def predict_sepsis_stream(patient_df, inference, LAB_COLS):
