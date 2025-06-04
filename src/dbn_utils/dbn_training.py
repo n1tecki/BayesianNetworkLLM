@@ -6,6 +6,12 @@ from pgmpy.inference import DBNInference
 from pgmpy.factors.discrete import TabularCPD
 import numpy as np
 from tqdm import tqdm
+from collections import Counter
+from tqdm import tqdm
+from pgmpy.estimators import BIC
+from copy import deepcopy
+import networkx as nx
+
 
 
 def flatten_df(df, LAB_COLS):
@@ -23,39 +29,84 @@ def flatten_df(df, LAB_COLS):
     return flat_df
 
 
-def structure_learning(df, LAB_COLS, CORRELATION_THRESHOLD=0.4):
-    # Select possibel edges
-    slice1_cols = [f"{v}_1" for v in ["sepsis"] + LAB_COLS]
-    corr_matrix   = df[slice1_cols].corr("spearman").abs()
+
+def bootstrap_edges(df, n_runs=100, conf=0.6):
+    
+    counts = Counter()
+
+    for _ in tqdm(range(n_runs)):
+        sample = df.sample(frac=1.0, replace=True)
+        est = HillClimbSearch(sample).estimate(scoring_method='bic-d')
+        for edge in est.edges():
+            counts[edge] += 1
+
+    whitelist = {e for e, c in counts.items() if c / n_runs >= conf}
+    return whitelist
+
+
+
+
+def prune_edges_by_bic(model, data, delta=0.0):
+    """
+    Greedy backwards elimination:
+    iteratively delete the edge whose removal
+    *does not worsen* BIC by more than `delta`
+    (delta=0 → keep only edges that strictly improve BIC).
+    """
+    scorer = BIC(data)
+    improved = True
+    while improved:
+        improved = False
+        current_score = scorer.score(model)
+        for edge in list(model.edges()):
+            tmp = deepcopy(model)
+            tmp.remove_edge(*edge)
+
+            # removal never *creates* cycles, but the test is cheap:
+            if not nx.is_directed_acyclic_graph(tmp):
+                continue
+
+            new_score = scorer.score(tmp)
+            if new_score - current_score >= -delta:
+                # Edge is useless (or harmful) → drop it for real
+                model.remove_edge(*edge)
+                improved = True
+                break          # restart sweep after a successful deletion
+    return model
+    
+
+
+
+def structure_learning(df, LAB_COLS, use_bootstrap=False, n_runs=100, conf=0.6):
 
     blacklist_edges = set()
+    whitelist_edges = None
 
-    # 1) Never allow any lab → sepsis (at the same time slice)
+    # 1) no variable (lab or sepsis itself) may point INTO sepsis
     for t in (0, 1):
-        for lab in LAB_COLS:
-            blacklist_edges.add((f"{lab}_{t}", f"sepsis_{t}"))
+        for parent in LAB_COLS:
+            blacklist_edges.add((f"{parent}_{t}", f"sepsis_{t}"))
+        blacklist_edges.add((f"{parent}_0", "sepsis_1"))
 
     # 2) Never allow any lab at t=1 to point backwards to t=0
-    for lab in LAB_COLS:
-        for var in ["sepsis"] + LAB_COLS:
-            blacklist_edges.add((f"{lab}_1", f"{var}_0"))
+    for parent in ["sepsis"] + LAB_COLS:
+        for child in ["sepsis"] + LAB_COLS:
+            blacklist_edges.add((f"{parent}_1", f"{child}_0"))
 
-    for l1 in LAB_COLS:
-        for l2 in LAB_COLS:
-            if l1 != l2 and corr_matrix.loc[f"{l1}_1", f"{l2}_1"] < CORRELATION_THRESHOLD:
-                # disallow l1_1 -> l2_1 *and* l2_1 -> l1_1
-                blacklist_edges.add((f"{l1}_1", f"{l2}_1"))
-                blacklist_edges.add((f"{l2}_1", f"{l1}_1"))
+    # 3) Do bootstrap to get the most confident edges as searchspace
+    if use_bootstrap:
+        raw_whitelist = bootstrap_edges(df, n_runs, conf)
+        whitelist_edges = {e for e in raw_whitelist if e not in blacklist_edges}
 
     # Structure Learning 
-    structure_estimator = HillClimbSearch(df[slice1_cols])
+    structure_estimator = HillClimbSearch(df)
     estimated_model = structure_estimator.estimate(
         scoring_method='bic-d',
         tabu_length=20,
         epsilon=0.0001,
         expert_knowledge=ExpertKnowledge(
-        forbidden_edges=list(blacklist_edges)),
-        #search_space=list(whitelist_edges))
+        forbidden_edges=list(blacklist_edges),
+        required_edges=list(whitelist_edges)),
     )
 
     return estimated_model
@@ -107,25 +158,56 @@ def make_missing_state_uninformative(model, labs, missing_state=0, t_slices=(0, 
 
 
 
-def dbn_train(flat_df, LAB_COLS, CORRELATION_THRESHOLD = 0.4, alpha=1e-6):
+def dbn_train(flat_df, LAB_COLS, alpha=1e-6, pruning_delta=0, use_bootstrap = True, bootstrap_runs= 100, bootstrap_conf=0.6):
 
     # Learning of the structure of the DBN
-    estimated_model = structure_learning(flat_df, LAB_COLS, CORRELATION_THRESHOLD)
+    estimated_model = structure_learning(
+        flat_df, 
+        LAB_COLS, 
+        use_bootstrap=use_bootstrap,
+        n_runs=bootstrap_runs, 
+        conf=bootstrap_conf
+    )
+
+    # Prune the big and complex network
+    estimated_model = prune_edges_by_bic(
+        estimated_model,
+        flat_df,
+        delta=pruning_delta
+    )
 
     # — DBN Model Creation ———————————————————————————————————————
     model = DBN()
 
     edges = []
+
     # 1)  persistence edges  var(0) -> var(1)
-    #for var in ["sepsis"] + LAB_COLS: is it the right direction?
     for var in ["sepsis"] + LAB_COLS:
         edges.append(((var, 0), (var, 1)))
-    # 2)  learned in-slice edges  u(1) -> v(1)
+    
+    # (2) edges learnt by HillClimbSearch  ─────────────────────────────
     for u, v in estimated_model.edges():
-        u_var, u_time = u.rsplit('_', 1)
-        v_var, v_time = v.rsplit('_', 1)
-        edges.append(((u_var, int(u_time)), (v_var, int(v_time))))
-        #model.add_edge((u_var, u_time), (v_var, v_time))
+        u_var, u_t = u.rsplit("_", 1); u_t = int(u_t)
+        v_var, v_t = v.rsplit("_", 1); v_t = int(v_t)
+
+        # skip illegal back-in-time edges
+        if u_t > v_t:
+            continue
+
+        # shift 1→1 into slice-0 template
+        if u_t == v_t == 1:
+            u_t = v_t = 0
+
+        try:
+            model.add_edge((u_var, u_t), (v_var, v_t))
+        except ValueError as err:
+            print(err)
+            # "forms a loop" → just ignore that single edge
+            if "forms a loop" in str(err):
+                continue
+            raise   
+
+    
 
     model.add_edges_from(edges)
     const_bn = model.get_constant_bn()
