@@ -1,5 +1,5 @@
 from src.dbn_utils.dbn_training import dbn_train, flatten_df, dbn_predict
-from src.dbn_utils.graph_visualisation import network_visualisation
+from src.dbn_utils.graph_visualisation import network_visualisation, network_slice_visualisations
 from src.dbn_utils.utils import create_train_test_set
 from src.dbn_utils.cpds_plot import plot_all_cpds_heatmap
 import matplotlib.pyplot as plt
@@ -28,17 +28,24 @@ test_ids = df_test.index.unique()
 # Flatten data and train model
 flat_train_df = flatten_df(df_train, LAB_COLS)
 model, inference = dbn_train(flat_train_df, 
-                        LAB_COLS, 
-                        CORRELATION_THRESHOLD = 0.4, 
-                        alpha=1e-6
+                        LAB_COLS,
+                        alpha=1e-6,
+                        pruning_delta=100,
+                        use_bootstrap=True,
+                        bootstrap_runs=1, 
+                        bootstrap_conf=0.8
                     )
 
 # Visualise model
 network_visualisation(
     model,
     html_file="data/dbn/sepsis_dbn.html",
-    notebook=False,
-    physics="barnes_hut"
+    notebook=False
+)
+
+network_slice_visualisations(
+    model,
+    base_html_file="data/dbn/dbn_slice"
 )
 
 with open('data/dbn/model.pkl', 'wb') as f_model:
@@ -48,7 +55,7 @@ with open('data/dbn/inference.pkl', 'wb') as f_inf:
     pickle.dump(inference, f_inf)
 
 
-plot_all_cpds_heatmap(model.get_cpds(), indices=[0,3,7], n_cols=3)
+# plot_all_cpds_heatmap(model.get_cpds(), indices=[0,3,7], n_cols=3)
 
 
 # ---------- PREDICT DATA ----------------------------------------
