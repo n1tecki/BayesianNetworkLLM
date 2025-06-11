@@ -18,7 +18,7 @@ summary = value_of_information(
     LAB_COLS
 )
 
-with open("data/VoI/voi_timelines_0_calibrated.json", "w", encoding="utf-8") as f:
+with open("data/VoI/voi_timelines_double_layer.json", "w", encoding="utf-8") as f:
     json.dump(summary, f, ensure_ascii=False, indent=2)
 
-print("Average lead-time (+ ⇒ earlier):", summary["lead_time"].mean())
+#print("Average lead-time (+ ⇒ earlier):", summary["lead_time"].mean())

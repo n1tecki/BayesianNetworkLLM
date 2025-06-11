@@ -30,7 +30,7 @@ sofa_df = sofa_df.sort_index(level="timestamp")
 df_test = pd.read_parquet("data/dbn/df_test.parquet")
 df_test = df_test.sort_values(["hadm_id", "timestamp"])
 
-with Path("data/dbn/predictions_0_calibrated.json").open() as f:
+with Path("data/dbn/predictions_double_layer.json").open() as f:
     predictions_dict = json.load(f)
 
 test_ids = df_test.index.unique()
@@ -116,6 +116,8 @@ print(f"  • tie          : {equal:5d}")
 
 print(f"Median lead (lab values): {pd.Series(d_steps).median():.1f}")
 print(f"Median lead (hours): {pd.Series(d_hours).median():.1f}")
+print(f"Mean lead (lab values): {pd.Series(d_steps).mean():.1f}")
+print(f"Mean lead (hours): {pd.Series(d_hours).mean():.1f}")
 
 # ------------------------------------------------------------------
 # DBN threshold sweep  (all stays)

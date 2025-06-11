@@ -32,7 +32,7 @@ model, inference = dbn_train(flat_train_df,
                         alpha=1e-6,
                         pruning_delta=100,
                         use_bootstrap=True,
-                        bootstrap_runs=1, 
+                        bootstrap_runs=10, 
                         bootstrap_conf=0.8
                     )
 
@@ -65,5 +65,5 @@ predictions_dict = dbn_predict(df_test,
     LAB_COLS
 )
 
-with open("data/dbn/predictions_240525.json", "w") as f:
+with open("data/dbn/predictions_double_layer.json", "w") as f:
     json.dump(predictions_dict, f, indent=2)
