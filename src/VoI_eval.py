@@ -12,6 +12,7 @@ from src.eval_utils.evaluation_time import (
     compare_two_models,
     plot_accuracy_bars,
     plot_outcome_heatmaps,
+    compare_dbn_to_medication
 )
 from src.eval_utils.metrics import metrics_vs_threshold_runs
 from src.eval_utils.VoI_curve_plot import plot_random_stay_trajectories
@@ -46,6 +47,7 @@ test_ids = df_test.index.unique()
 # --------------------------------------------------------------------------
 runs = []                 # (y_voi, ts_voi, y_sofa, ts_sofa)
 septic_runs = []
+septic_ids = []
 correct_septic_runs = []
 
 ground_truth = []         # 0/1 per stay
@@ -102,6 +104,7 @@ for hadm in test_ids:
     # ---------------------------- collect subsets -------------------------
     if label == 1:                     # septic stays only
         septic_runs.append(run_tuple)
+        septic_ids.append(hadm)
         if voi_pred == 1 and sofa_pred == 1:
             correct_septic_runs.append(run_tuple)
 
@@ -123,6 +126,32 @@ plot_random_stay_trajectories(sofa_df, df_test, voi_pred_dict, test_ids, hadm=No
 # 21151580
 # 29679030
 # 26738143
+
+
+# ------------------------------------------------------------------
+# Check medication time lead
+# ------------------------------------------------------------------
+med_df = (pd.read_csv("data/sql_filtering/_first_sepsis_action.csv",
+                      parse_dates=["first_action_time"])
+            .sort_values("first_action_time"))
+med_times = med_df.groupby("hadm_id")["first_action_time"].first().to_dict()
+
+earlier_m, later_m, equal_m, d_hours_med = compare_dbn_to_medication(
+        septic_runs, septic_ids, med_times,
+        dbn_thr=0.5, show_plots=True)
+
+print("\nDBN vs. earliest medication")
+print(f"  • DBN earlier  : {earlier_m:5d}")
+print(f"  • DBN later    : {later_m:5d}")
+print(f"  • tie          : {equal_m:5d}")
+
+if d_hours_med:
+    dh_series = pd.Series(d_hours_med)
+    print(f"Median lead (hours): {dh_series.median():.1f}")
+    print(f"Mean lead   (hours): {dh_series.mean():.1f}")
+
+
+
 
 # --------------------------------------------------------------------------
 # lead-time analysis  (septic stays where both models fire)

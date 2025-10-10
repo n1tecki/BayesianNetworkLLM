@@ -1,7 +1,7 @@
 import pandas as pd
 from src.preprocessing_utils.sofa_classification import compute_sofa_scores, classify_sofa_stays, sofa_classification, adding_sepsis_classification_per_stay
 from preprocessing_utils.preprocessing_tools import clean_bloodgas, gcs_verbal_to_numeric, df_to_temporal, forward_fill, adding_sofa_classification, clean_min_max, quantile_bins, cns_transformation, compute_pf_ratio, log_uniform_bins, compute_gcs_mice
-from src.preprocessing_utils.stats import lab_value_counts, count_leading_zeros_before_sepsis, sepsis_duration_count, sepsis_nonsepsis_count, plot_distribution_with_bell
+from src.preprocessing_utils.stats import lab_value_counts, count_leading_zeros_before_sepsis, sepsis_duration_count, sepsis_nonsepsis_count, plot_distribution_with_bell, plot_empirical_distribution, bin_distribution
 
 
 # For the paper here clean the extreme values of each lab value. Report how many got caught and replaced.
@@ -23,7 +23,7 @@ N_BINS = 3
 temporal_df = df_to_temporal(df)
 temporal_df_clean = clean_bloodgas(temporal_df, fio2_col='FiO2', pao2_col='PaO2')
 temporal_df_clean = gcs_verbal_to_numeric(temporal_df_clean)
-temporal_df_clean = clean_min_max(temporal_df_clean, column='bilirubin_total', min_val=.1, max_val=50, replace=False)
+temporal_df_clean = clean_min_max(temporal_df_clean, column='bilirubin_total', min_val=.1, max_val=30, replace=False)
 temporal_df_clean = clean_min_max(temporal_df_clean, column='creatinin', min_val=.2, max_val=20, replace=False)
 temporal_df_clean = clean_min_max(temporal_df_clean, column='mean_arterial_pressure', min_val=30, max_val=200, replace=False)
 temporal_df_clean = clean_min_max(temporal_df_clean, column='platelet_count', min_val=10, max_val=1000, replace=False)
@@ -83,6 +83,27 @@ print(sofa_df_diagnoses_classified.loc[first_hadm])
 # plot_distribution_with_bell(lab_count_stats['PaO2'], label=r"$\mathrm{PaO_2}$ - Fraction of Inspired Oxygen", binsize=8)
 # plot_distribution_with_bell(lab_count_stats['FiO2'], label=r"$\mathrm{FiO_2}$ - Fraction of Inspired Oxygen", binsize=8)
 # plot_distribution_with_bell(lab_count_stats['cns_score'], unit=r"", label="Central nervous system Score", binsize=1)
+
+# plot_empirical_distribution(lab_count_stats['pf_ratio'], unit="mmHg", label=r"$\mathrm{PaO_2}$/$\mathrm{FiO_2}$", binsize=.25, show_bell=True)
+# plot_empirical_distribution(lab_count_stats['platelet_count'], unit=r"($\times 10^9$/L)", label="Platelet Count", binsize=10, show_bell=True, xtick_spacing=50)
+# plot_empirical_distribution(lab_count_stats['mean_arterial_pressure'], unit="mmHg", label="Mean Arterial Pressure", binsize=2, show_bell=True, xtick_spacing=10)
+# plot_empirical_distribution(lab_count_stats['creatinin'], unit="mg/dL", label="Creatinin", binsize=.25, show_bell=True, xtick_spacing=1.0)
+# plot_empirical_distribution(lab_count_stats['bilirubin_total'], unit="mg/dL", label="Total Bilirubin", binsize=.2, show_bell=True, xtick_spacing=.5)
+# plot_empirical_distribution(lab_count_stats['gcs_verbal'], unit=r"", label="CNS Verbal Score", binsize=0.9999999, show_bell=True, xtick_spacing=1)
+# plot_empirical_distribution(lab_count_stats['gcs_motor'], unit=r"", label="CNS Motor Score", binsize=0.9999999, show_bell=True, xtick_spacing=1)
+# plot_empirical_distribution(lab_count_stats['gcs_eye'], unit=r"", label="CNS Eye Score", binsize=0.9999999, show_bell=True, xtick_spacing=1)
+# plot_empirical_distribution(lab_count_stats['PaO2'], label=r"$\mathrm{PaO_2}$ - Fraction of Inspired Oxygen", binsize=8, show_bell=True)
+# plot_empirical_distribution(lab_count_stats['FiO2'], label=r"$\mathrm{FiO_2}$ - Fraction of Inspired Oxygen", binsize=8, show_bell=True)
+# plot_empirical_distribution(lab_count_stats['cns_score'], unit=r"", label="Central nervous system Score", binsize=1, show_bell=True, xtick_spacing=2)
+
+
+# bin_distribution(lab_value_counts(binned_train_data)['pf_ratio'], label=r"$\mathrm{PaO_2}$/$\mathrm{FiO_2}$")
+# bin_distribution(lab_value_counts(binned_train_data)['platelet_count'], label="Platelet Count")
+# bin_distribution(lab_value_counts(binned_train_data)['mean_arterial_pressure'], label="Mean Arterial Pressure")
+# bin_distribution(lab_value_counts(binned_train_data)['creatinin'], label="Creatinin")
+# bin_distribution(lab_value_counts(binned_train_data)['bilirubin_total'], label="Total Bilirubin")
+# bin_distribution(lab_value_counts(binned_train_data)['cns_score'])
+
 
 
 

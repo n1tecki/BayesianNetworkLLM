@@ -5,13 +5,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.metrics import confusion_matrix
-from src.dbn_utils.metrics import metrics_vs_threshold_runs
-from src.dbn_utils.evaluation_time import (
+from src.eval_utils.metrics import metrics_vs_threshold_runs
+from src.eval_utils.evaluation_time import (
     compare_single_threshold,
     compare_var_thresholds,
     compare_two_models,
     plot_accuracy_bars,
-    plot_outcome_heatmaps
+    plot_outcome_heatmaps,
+    compare_dbn_to_medication,
 )
 
 # ------------------------------------------------------------------
@@ -40,6 +41,7 @@ test_ids = df_test.index.unique()
 # ------------------------------------------------------------------
 runs, septic_runs, correct_septic_runs = [], [], []
 dbn_sepsis_preds, sofa_sepsis_preds, ground_truth = [], [], []
+septic_ids = []
 
 for hadm in test_ids:
 
@@ -91,6 +93,7 @@ for hadm in test_ids:
     # ------------------------------------------------------------
     if label == 1:                       # all septic stays
         septic_runs.append(run_tuple)
+        septic_ids.append(hadm)
 
         if dbn_pred == 1 and sofa_pred == 1:     # …and both models correct
             correct_septic_runs.append(run_tuple)
@@ -118,6 +121,33 @@ print(f"Median lead (lab values): {pd.Series(d_steps).median():.1f}")
 print(f"Median lead (hours): {pd.Series(d_hours).median():.1f}")
 print(f"Mean lead (lab values): {pd.Series(d_steps).mean():.1f}")
 print(f"Mean lead (hours): {pd.Series(d_hours).mean():.1f}")
+
+
+
+
+# ------------------------------------------------------------------
+# Check medication time lead
+# ------------------------------------------------------------------
+med_df = (pd.read_csv("data/sql_filtering/_first_sepsis_action.csv",
+                      parse_dates=["first_action_time"])
+            .sort_values("first_action_time"))
+med_times = med_df.groupby("hadm_id")["first_action_time"].first().to_dict()
+
+earlier_m, later_m, equal_m, d_hours_med = compare_dbn_to_medication(
+        septic_runs, septic_ids, med_times,
+        dbn_thr=DBN_THR, show_plots=True)
+
+print("\nDBN vs. earliest medication")
+print(f"  • DBN earlier  : {earlier_m:5d}")
+print(f"  • DBN later    : {later_m:5d}")
+print(f"  • tie          : {equal_m:5d}")
+
+if d_hours_med:
+    dh_series = pd.Series(d_hours_med)
+    print(f"Median lead (hours): {dh_series.median():.1f}")
+    print(f"Mean lead   (hours): {dh_series.mean():.1f}")
+
+    
 
 # ------------------------------------------------------------------
 # DBN threshold sweep  (all stays)

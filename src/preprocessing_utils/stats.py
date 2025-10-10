@@ -141,3 +141,124 @@ def plot_distribution_with_bell(data, unit, label='empty', binsize=0.5):
     plt.title(f'Distribution of Laboratory Value {label}')
     plt.tight_layout()
     plt.show()
+
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def plot_empirical_distribution(data,
+                                unit,
+                                label='empty',
+                                binsize=0.5,
+                                show_bell=False,
+                                xtick_spacing=None):
+    """
+    Plot histogram (density) of data and overlay the empirical KDE
+    (optionally also overlay a normal bell curve).
+    """
+    # 1) Normalize to counts
+    if isinstance(data, tuple):
+        first, second = data
+        if isinstance(first, pd.Series):
+            counts = first.sort_index()
+        else:
+            vals, cnts = first, second
+            counts = pd.Series(cnts, index=vals).sort_index()
+    elif isinstance(data, pd.Series):
+        counts = data.sort_index()
+    else:
+        raise TypeError(f"Unsupported data type: {type(data)}")
+    
+    # 2) Expand to observations
+    obs = np.repeat(
+        counts.index.values.astype(float),
+        counts.values.astype(int)
+    )
+    
+    # 3) Histogram bin edges
+    obs_min, obs_max = obs.min(), obs.max()
+    bins = np.arange(obs_min, obs_max + binsize, binsize)
+    
+    plt.figure(figsize=(8, 4))
+    # 4) Histogram as density (matches your bins)
+    plt.hist(obs, bins=bins, density=True, edgecolor='black', alpha=0.6, label="Histogram")
+
+    # 5) KDE (empirical distribution, not normal!)
+    sns.kdeplot(obs, bw_adjust=1, fill=False, color='C1', label='Empirical density', ax=plt.gca())
+    
+    # 6) Optionally: Overlay normal bell for reference
+    if show_bell:
+        mu, sigma = np.mean(obs), np.std(obs)
+        x = np.linspace(mu - 3*sigma, mu + 3*sigma, 1000)
+        pdf = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp(- (x - mu)**2 / (2 * sigma**2))
+        plt.plot(x, pdf, linestyle='--', color='C2', label="Fitted normal distribution")
+
+    # 7) Set custom x-ticks if requested
+    if xtick_spacing is not None:
+        ticks = np.arange(0, obs_max + xtick_spacing, xtick_spacing)
+        plt.xticks(ticks)
+
+    plt.xlabel(f'Value in {unit}')
+    plt.ylabel('Density')
+    plt.title(f'Distribution of Laboratory Value {label}')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+
+def bin_distribution(data, label='empty'):
+    """
+    Plot PF ratio bin counts as a horizontal bar chart, annotating how many admissions had sepsis.
+
+    Parameters
+    ----------
+    data : tuple
+        A tuple (counts, sepsis_admissions) where
+        - counts is a pandas Series of bin counts (index = bin, values = count)
+        - sepsis_admissions is an integer (number of sepsis admissions)
+    label : str
+        Text label for the bins (used in the axis label and title)
+    """
+    counts, sepsis_admissions = data
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    # Horizontal bars
+    y_positions = range(len(counts))
+    ax.barh(y_positions, counts.values, alpha=0.8)
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels(counts.index.astype(str))
+    ax.set_xlabel('Count')
+    ax.set_ylabel(f'{label} Bin')
+    ax.set_title(f'Bin Distribution for {label}')
+
+    # Extend x-axis by 10% beyond max count so annotations don’t clip
+    max_val = counts.values.max()
+    ax.set_xlim(0, max_val * 1.2)
+
+    # Light grid lines for readability
+    ax.xaxis.grid(True, linestyle='--', alpha=0.5)
+
+    # Annotate each bar with its count
+    for i, val in enumerate(counts.values):
+        ax.text(val + max_val*0.01, i, str(val), va='center')
+
+    # Corner textbox for sepsis admissions
+    ax.text(
+        0.95, 0.05,
+        transform=ax.transAxes,
+        ha='right',
+        va='bottom',
+        fontsize=10,
+        bbox=dict(boxstyle='round,pad=0.3', alpha=0.2)
+    )
+
+    plt.tight_layout()
+    plt.show()
+
+
+
+

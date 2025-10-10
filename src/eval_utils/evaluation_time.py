@@ -72,6 +72,7 @@ def compare_single_threshold(runs, dbn_thr=0.7, sofa_thr=2, show_plots=True):
         bins_steps = range(min(deltas_steps), max(deltas_steps) + 2)
         plt.figure(figsize=(7, 4))
         plt.hist(deltas_steps, bins=bins_steps, edgecolor="black", color="#8ca6c8", alpha=1.0)
+        plt.axvline(0, ls="--", lw=0.8)
         plt.title("Δ labs (DBN − SOFA)")
         plt.xlabel("Labs")
         plt.ylabel("Frequency")
@@ -121,26 +122,26 @@ def compare_var_thresholds(runs,
                            y_threshold=2):
     """
     For every DBN threshold compute the proportion of runs in which DBN fires
-    earlier / later / tie (by steps).  Uses runs where both models fire.
+    earlier / later / tie (by steps). Uses runs where both models fire.
+    Adds a vertical line at the threshold where the DBN-later and DBN-earlier curves intersect.
     """
     earlier_p, later_p, equal_p = [], [], []
 
+    # Compute proportions for each threshold
     for thr in yhat_thresholds:
         earlier = later = equal = total = 0
-
         for y_hat, _ts_hat, y, _ts_sofa in runs:
-
             s_hat = steps_to_threshold(y_hat, thr)
             s_y   = steps_to_threshold(y,    y_threshold)
-
             if s_hat is None or s_y is None:
                 continue
-
             total += 1
-            if   s_hat < s_y: earlier += 1
-            elif s_hat > s_y: later   += 1
-            else:             equal   += 1
-
+            if   s_hat < s_y:
+                earlier += 1
+            elif s_hat > s_y:
+                later   += 1
+            else:
+                equal   += 1
         if total:
             earlier_p.append(earlier / total)
             later_p.append(later   / total)
@@ -150,10 +151,34 @@ def compare_var_thresholds(runs,
             later_p.append(np.nan)
             equal_p.append(np.nan)
 
+    # Convert to numpy for calculation
+    earlier_arr = np.array(earlier_p)
+    later_arr   = np.array(later_p)
+    diffs = later_arr - earlier_arr
+
+    # Determine crossing threshold
+    # 1) Look for sign change for interpolation
+    sign_changes = np.where(np.sign(diffs[:-1]) != np.sign(diffs[1:]))[0]
+    if sign_changes.size > 0:
+        i = sign_changes[0]
+        # linear interpolation between thresholds
+        t1, t2 = yhat_thresholds[i], yhat_thresholds[i+1]
+        d1, d2 = diffs[i], diffs[i+1]
+        thr_cross = t1 - d1 * (t2 - t1) / (d2 - d1)
+    else:
+        # fallback: find minimum absolute difference
+        idx = np.nanargmin(np.abs(diffs))
+        thr_cross = yhat_thresholds[idx]
+
+    # Plot
     plt.figure(figsize=(6, 4))
     plt.plot(yhat_thresholds, earlier_p, label="DBN earlier")
     plt.plot(yhat_thresholds, later_p,  label="DBN later")
     plt.plot(yhat_thresholds, equal_p,  label="Tie")
+
+    if thr_cross is not None:
+        plt.axvline(thr_cross, ls='--', lw=1)
+
     plt.title("Proportion of outcomes vs. DBN threshold")
     plt.xlabel("DBN probability threshold")
     plt.ylabel("Proportion")
@@ -319,3 +344,57 @@ def plot_outcome_heatmaps(runs,
 
     fig.suptitle("Outcome proportions across (DBN, SOFA) threshold grid", y=1.04, fontsize=14)
     plt.show()
+
+
+
+
+# ---------------------------------------------------------------------------
+# DBN vs. first medication lead-time
+# ---------------------------------------------------------------------------
+
+def compare_dbn_to_medication(runs,
+                              hadm_ids,
+                              med_times,
+                              dbn_thr=0.50,
+                              show_plots=True):
+    """
+    Lead-time of DBN (first crossing of `dbn_thr`) relative to the earliest
+    medication administration logged in *_first_sepsis_action.csv*.
+    """
+    earlier = later = equal = 0
+    deltas_hours = []
+
+    for (y_dbn, ts_dbn, *_), hadm in zip(runs, hadm_ids):
+        t_med = med_times.get(hadm)
+        if t_med is None:
+            continue                                 # no drug for this stay
+
+        t_dbn = time_to_threshold(y_dbn, ts_dbn, dbn_thr)
+        if t_dbn is None:
+            continue                                 # DBN never fired
+
+        delta_h = (t_dbn - t_med).total_seconds() / 3600.0
+        deltas_hours.append(delta_h)
+
+        if   delta_h < 0: earlier += 1
+        elif delta_h > 0: later   += 1
+        else:             equal   += 1
+
+    # -------- optional histogram ----------------------------------------
+    if show_plots and deltas_hours:
+        max_h = 50
+        d_clip = np.clip(deltas_hours, -max_h, max_h)
+        bins = np.arange(-max_h, max_h + 1, 1)
+
+        plt.figure(figsize=(7, 4))
+        plt.hist(d_clip, bins=bins, edgecolor="black",
+                 color="#8ca6c8", alpha=1.0)
+        plt.axvline(0, ls="--", lw=0.8)
+        plt.title(f"Δ hours (DBN – first medication), thr={dbn_thr:.2f}")
+        plt.xlabel("Hours (negative ⇒ DBN earlier)")
+        plt.ylabel("Frequency")
+        plt.xlim(-max_h, max_h)
+        plt.tight_layout()
+        plt.show()
+
+    return earlier, later, equal, deltas_hours
